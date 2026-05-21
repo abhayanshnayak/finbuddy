@@ -119,7 +119,7 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               },
               "computation_growth_rates": "Calculated using CAGR formula (Ending Value / Beginning Value)^(1/Years) - 1 on the raw_data histories.",
               "windage_growth_rate": 0.12,
-              "computation_windage": "Average of 10-year FCF growth rates within 1 standard deviation. Raw FCF rates: [0.15, 0.14, 0.11, 0.25 (excluded), ...]. Average of valid: 0.12",
+              "computation_windage": "Average of 10-year OCF growth rates within 1 standard deviation. Raw OCF rates: [0.15, 0.14, 0.11, 0.25 (excluded), ...]. Average of valid: 0.12",
               "computation_roic": "Sum of last 3, 5, 10 years ROIC from raw_data / N.",
               "computation_roe": "Sum of last 3, 5, 10 years ROE from raw_data / N.",
               "debt_payoff_years": 1.1,

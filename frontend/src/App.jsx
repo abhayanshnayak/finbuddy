@@ -422,8 +422,73 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Core Growth Indicators */}
+                  {/* Payback Time Valuation Card */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Valuations (Payback Time)</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
+                        <div>
+                          <span className="text-xs font-semibold text-blue-800 uppercase tracking-wider block">Payback Time</span>
+                          <span className="text-3xl font-extrabold text-blue-700">
+                            {report.financials.valuations.payback_time_years > 0 
+                              ? `${report.financials.valuations.payback_time_years} Years` 
+                              : "10+ Years"}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs text-gray-500 block">Status</span>
+                          <span className={`text-lg font-semibold ${report.financials.valuations.payback_time_years > 0 && report.financials.valuations.payback_time_years <= 8 ? 'text-green-600' : 'text-amber-600'}`}>
+                            {report.financials.valuations.payback_time_years > 0 && report.financials.valuations.payback_time_years <= 8 ? "Pass" : "Fail"}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {report.financials.valuations.projected_fcf_per_year?.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            <span className="text-[11px] font-semibold text-gray-700 ml-1">10-Year FCF Projection</span>
+                            <span className="text-[9px] text-gray-500 uppercase tracking-widest font-bold bg-white px-2 py-0.5 rounded shadow-sm border border-gray-100">
+                              Growth: {(report.financials.valuations.windage_growth_rate_used * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                          
+                          <div className="max-h-[140px] overflow-y-auto pr-1 custom-scrollbar border border-gray-100 rounded-xl">
+                            <table className="w-full text-xs text-left">
+                              <thead className="bg-gray-50 text-gray-500 sticky top-0 shadow-sm">
+                                <tr>
+                                  <th className="p-2 font-medium rounded-tl-xl text-center w-12 border-b border-gray-200">Yr</th>
+                                  <th className="p-2 font-medium text-right rounded-tr-xl border-b border-gray-200">Proj. FCF</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {report.financials.valuations.projected_fcf_per_year.map((proj) => (
+                                  <tr key={proj.year} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="p-2 text-center text-gray-400 font-medium">{proj.year}</td>
+                                    <td className="p-2 text-right font-mono text-gray-700 font-medium">
+                                      {proj.fcf < 0 
+                                        ? `-$${formatLargeNumber(Math.abs(proj.fcf))}` 
+                                        : `$${formatLargeNumber(proj.fcf)}`}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100/50 flex items-start space-x-2 mt-2">
+                            <svg className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p className="text-[10px] text-amber-800 leading-relaxed font-medium">
+                              {report.financials.valuations.computation_payback_details}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Core Growth Indicators */}
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 md:col-span-2">
                     <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Big 4 Growth Rates</h3>
                     <table className="w-full text-sm text-left">
                       <thead className="bg-gray-50 text-gray-600">
@@ -504,7 +569,7 @@ function App() {
                       <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 text-sm text-blue-800">
                         <p className="font-semibold mb-1">How is Windage Growth Rate Calculated?</p>
                         <p className="text-xs text-blue-700 leading-relaxed">
-                          1. We compute year-over-year (YoY) Operational Free Cash Flow (FCF) growth rates for up to the last 15 years.<br />
+                          1. We compute year-over-year (YoY) Operating Cash Flow (OCF) growth rates for up to the last 15 years.<br />
                           2. We calculate the mean and standard deviation of all YoY rates.<br />
                           3. To ensure stable growth projections, we filter out outliers (rates outside <strong>1 standard deviation</strong> from the mean).<br />
                           4. The final Windage Growth Rate is the average of the remaining (non-outlier) rates: <strong className="text-blue-900">{(windageDetails?.final_rate * 100).toFixed(2)}%</strong>.
@@ -516,8 +581,8 @@ function App() {
                           <thead className="bg-gray-50 text-gray-600 uppercase tracking-wider text-[10px]">
                             <tr>
                               <th className="p-3">Period</th>
-                              <th className="p-3 text-right">Start FCF</th>
-                              <th className="p-3 text-right">End FCF</th>
+                              <th className="p-3 text-right">Start OCF</th>
+                              <th className="p-3 text-right">End OCF</th>
                               <th className="p-3 text-right">Calculated YoY</th>
                               <th className="p-3 text-center">Status</th>
                             </tr>
@@ -621,7 +686,7 @@ function App() {
                     <div className="space-y-4 animate-in fade-in duration-200">
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-100/80 text-xs text-gray-600 leading-relaxed">
                         <p className="font-semibold text-gray-800 mb-1">Standard Deviation Filtering Log</p>
-                        We filter out extreme YoY Operational Free Cash Flow (FCF) growth spikes or drop-offs that do not reflect sustainable operations. By bounding growth rates within 1 standard deviation, we align projections with stable operations.
+                        We filter out extreme YoY Operating Cash Flow (OCF) growth spikes or drop-offs that do not reflect sustainable operations. By bounding growth rates within 1 standard deviation, we align projections with stable operations.
                       </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

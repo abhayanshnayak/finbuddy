@@ -66,6 +66,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
             and "valuations" in cached_data["financials"]
             and "computation_pe_details" in cached_data["financials"]["valuations"]
             and "computation_windage_details" in cached_data["financials"]["valuations"]
+            and "payback_time_years" in cached_data["financials"]["valuations"]
         ):
             print(f"Using cached report for {ticker}")
             return cached_data
@@ -89,6 +90,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
                 and "valuations" in cached_data["financials"]
                 and "computation_pe_details" in cached_data["financials"]["valuations"]
                 and "computation_windage_details" in cached_data["financials"]["valuations"]
+                and "payback_time_years" in cached_data["financials"]["valuations"]
             ):
                 db.save_company_data(original_ticker, cached_data)
                 return cached_data
@@ -266,6 +268,7 @@ def get_report(ticker: str, force_fresh: bool = False):
             and "valuations" in cached_data["financials"]
             and "computation_pe_details" in cached_data["financials"]["valuations"]
             and "computation_windage_details" in cached_data["financials"]["valuations"]
+            and "payback_time_years" in cached_data["financials"]["valuations"]
         ):
             return cached_data
 
@@ -334,6 +337,7 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
                 and "roic_3_yr_avg" in cached["qualitative"]["management"]
                 and "financials" in cached
                 and "valuations" in cached["financials"]
+                and "payback_time_years" in cached["financials"]["valuations"]
             ):
                 batch_data["symbols"][ticker] = {
                     "status": "completed",
