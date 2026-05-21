@@ -22,6 +22,7 @@ function App() {
 
   // Bulk Ingestion State
   const [bulkInput, setBulkInput] = useState('');
+  const [bulkTagsInput, setBulkTagsInput] = useState('');
   const [bulkError, setBulkError] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
   const [activeBatchId, setActiveBatchId] = useState(null);
@@ -96,6 +97,12 @@ function App() {
       .map(t => t.trim().toUpperCase())
       .filter(Boolean);
       
+    // Parse tags
+    const rawTags = bulkTagsInput
+      .split(/[\s,\n]+/)
+      .map(t => t.trim().toLowerCase())
+      .filter(Boolean);
+      
     if (rawTickers.length === 0) {
       setBulkError('Please enter at least one stock ticker.');
       return;
@@ -118,12 +125,13 @@ function App() {
     
     try {
       const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      console.log("Sending payload to batch API:", { tickers: rawTickers, force_fresh: bulkForceFresh, tags: rawTags });
       const response = await fetch(`${apiBase}/api/batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tickers: rawTickers, force_fresh: bulkForceFresh }),
+        body: JSON.stringify({ tickers: rawTickers, force_fresh: bulkForceFresh, tags: rawTags }),
       });
       
       if (!response.ok) {
@@ -201,7 +209,16 @@ function App() {
     
     return Object.entries(batchStatus.symbols).filter(([sym, data]) => {
       // 1. Search filter
-      const matchesSearch = sym.toLowerCase().includes(searchQuery.toLowerCase());
+      const searchTerms = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      
+      const tickerLower = sym.toLowerCase();
+      const tags = data.tags || [];
+      const tagsString = tags.join(' ').toLowerCase();
+
+      // For multiple tags in searchQuery, check if ALL terms match either ticker or tags
+      const matchesSearch = searchTerms.length === 0 || searchTerms.every(term => 
+        tickerLower.includes(term) || tagsString.includes(term)
+      );
       
       // 2. Status filter
       let matchesStatus = true;
@@ -917,6 +934,16 @@ function App() {
                   )}
                 </div>
                 
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={bulkTagsInput}
+                    onChange={(e) => setBulkTagsInput(e.target.value)}
+                    placeholder="Optional: Enter tags (e.g. tech, growth, large-cap)..."
+                    className="w-full px-5 py-3 border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-xl outline-none transition-all shadow-inner text-gray-850 placeholder-gray-405 font-mono text-sm"
+                  />
+                </div>
+                
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -1158,6 +1185,15 @@ function App() {
                             {/* Left part: Symbol and timestamp */}
                             <div className="flex items-center space-x-3">
                               <span className="text-base font-extrabold text-slate-800 tracking-wide font-mono bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm">{sym}</span>
+                              {item.tags && item.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {item.tags.map(tag => (
+                                    <span key={tag} className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                               {item.timestamp && (
                                 <span className="text-[10px] text-gray-400 font-semibold uppercase">
                                   {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

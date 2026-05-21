@@ -49,10 +49,12 @@ except Exception as e:
 class BatchPayload(BaseModel):
     tickers: List[str] = Field(..., max_items=500)
     force_fresh: bool = False
+    tags: List[str] = []
 
-def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: FinancialCalculator, ai: AIService, db: DBService, force_fresh: bool = False):
+def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: FinancialCalculator, ai: AIService, db: DBService, force_fresh: bool = False, tags: List[str] = None):
     ticker = ticker.upper()
     original_ticker = ticker
+    tags = tags or []
     
     # 1. Check Cache first to make it idempotent and ultra-fast
     if not force_fresh:
@@ -69,7 +71,17 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
             and "payback_time_years" in cached_data["financials"]["valuations"]
         ):
             print(f"Using cached report for {ticker}")
+            existing_tags = cached_data.get("tags", [])
+            combined_tags = list(set(existing_tags + tags))
+            if set(existing_tags) != set(combined_tags):
+                cached_data["tags"] = combined_tags
+                db.save_company_data(ticker, cached_data)
             return cached_data
+            
+    # Fetch existing to preserve tags even if we're doing a force_fresh
+    existing_data = db.get_company_data(ticker) if force_fresh else cached_data
+    existing_tags = existing_data.get("tags", []) if existing_data else []
+    combined_tags = list(set(existing_tags + tags))
         
     # 2. Fetch Data from Finnhub
     try:
@@ -92,9 +104,19 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
                 and "computation_windage_details" in cached_data["financials"]["valuations"]
                 and "payback_time_years" in cached_data["financials"]["valuations"]
             ):
+                existing_tags_actual = cached_data.get("tags", [])
+                combined_tags_actual = list(set(existing_tags_actual + tags))
+                if set(existing_tags_actual) != set(combined_tags_actual):
+                    cached_data["tags"] = combined_tags_actual
+                    db.save_company_data(actual_ticker, cached_data)
                 db.save_company_data(original_ticker, cached_data)
                 return cached_data
                 
+        # Also grab existing tags for actual ticker if doing a full fresh
+        if force_fresh or not cached_data:
+            existing_data_actual = db.get_company_data(actual_ticker)
+            existing_tags_actual = existing_data_actual.get("tags", []) if existing_data_actual else []
+            combined_tags = list(set(existing_tags_actual + tags))
         ticker = actual_ticker
         
         metrics = finnhub.get_metrics(ticker)
@@ -179,6 +201,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
     # 5. Build Final JSON Schema
     report_data = {
         "ticker": ticker,
+        "tags": combined_tags,
         "name": profile.get("name", ticker),
         "industry": profile.get("finnhubIndustry", "Unknown"),
         "overview": ai_analysis.get("overview", "No overview available."),
@@ -280,9 +303,10 @@ def get_report(ticker: str, force_fresh: bool = False):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-def local_background_ingest(batch_id: str, tickers_to_process: List[str], force_fresh: bool = False):
+def local_background_ingest(batch_id: str, tickers_to_process: List[str], force_fresh: bool = False, tags: List[str] = None):
     """Background fallback when Pub/Sub is not available or credentials are local-only"""
     print(f"Starting local background ingestion for batch {batch_id}...")
+    tags = tags or []
     for ticker in tickers_to_process:
         # Check if batch still exists
         batch = db.get_batch(batch_id)
@@ -295,7 +319,7 @@ def local_background_ingest(batch_id: str, tickers_to_process: List[str], force_
             # Pause to preserve rate limits (approx 2s between calls)
             time.sleep(2.0)
             
-            generate_and_cache_report(ticker, finnhub, calc, ai, db, force_fresh=force_fresh)
+            generate_and_cache_report(ticker, finnhub, calc, ai, db, force_fresh=force_fresh, tags=tags)
             
             db.update_batch_ticker_status(batch_id, ticker, "completed")
             
@@ -305,6 +329,7 @@ def local_background_ingest(batch_id: str, tickers_to_process: List[str], force_
 
 @app.post("/api/batch")
 def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
+    print("RECEIVED BATCH PAYLOAD:", payload.dict())
     # De-duplicate and validate
     raw_tickers = list(set([t.strip().upper() for t in payload.tickers if t.strip()]))
     if len(raw_tickers) > 500:
@@ -323,7 +348,8 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
         "total_symbols": len(raw_tickers),
         "completed_count": 0,
         "failed_count": 0,
-        "symbols": {}
+        "symbols": {},
+        "tags": payload.tags
     }
     
     tickers_to_process = []
@@ -341,10 +367,17 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
                 and "valuations" in cached["financials"]
                 and "payback_time_years" in cached["financials"]["valuations"]
             ):
+                existing_tags_cached = cached.get("tags", [])
+                combined_tags_cached = list(set(existing_tags_cached + payload.tags))
+                if set(existing_tags_cached) != set(combined_tags_cached):
+                    cached["tags"] = combined_tags_cached
+                    db.save_company_data(ticker, cached)
+
                 batch_data["symbols"][ticker] = {
                     "status": "completed",
                     "error": None,
-                    "timestamp": datetime.now(pytz.utc).isoformat()
+                    "timestamp": datetime.now(pytz.utc).isoformat(),
+                    "tags": payload.tags
                 }
                 batch_data["completed_count"] += 1
                 continue
@@ -352,7 +385,8 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
         batch_data["symbols"][ticker] = {
             "status": "pending",
             "error": None,
-            "timestamp": datetime.now(pytz.utc).isoformat()
+            "timestamp": datetime.now(pytz.utc).isoformat(),
+            "tags": payload.tags
         }
         tickers_to_process.append(ticker)
             
@@ -377,7 +411,7 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
     if publisher and topic_path:
         try:
             for ticker in tickers_to_process:
-                msg_bytes = json.dumps({"ticker": ticker, "batch_id": batch_id, "force_fresh": payload.force_fresh}).encode("utf-8")
+                msg_bytes = json.dumps({"ticker": ticker, "batch_id": batch_id, "force_fresh": payload.force_fresh, "tags": payload.tags}).encode("utf-8")
                 publisher.publish(topic_path, msg_bytes)
                 published_successfully += 1
         except Exception as e:
@@ -386,7 +420,7 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
             
     # Fallback to local background tasks if Pub/Sub failed or not configured
     if published_successfully == 0:
-        background_tasks.add_task(local_background_ingest, batch_id, tickers_to_process, payload.force_fresh)
+        background_tasks.add_task(local_background_ingest, batch_id, tickers_to_process, payload.force_fresh, payload.tags)
         print(f"Dispatched {len(tickers_to_process)} tickers to local FastAPI BackgroundTasks.")
         
     return {

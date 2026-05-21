@@ -29,9 +29,9 @@ limiter = AsyncLimiter(max_rate=20, time_period=60)
     stop=stop_after_attempt(5),
     reraise=True
 )
-def process_ticker_with_retry(ticker: str, force_fresh: bool):
+def process_ticker_with_retry(ticker: str, force_fresh: bool, tags: list):
     print(f"[Worker] Running ingestion for {ticker} (force_fresh={force_fresh})...")
-    return generate_and_cache_report(ticker, finnhub, calc, ai, db, force_fresh=force_fresh)
+    return generate_and_cache_report(ticker, finnhub, calc, ai, db, force_fresh=force_fresh, tags=tags)
 
 @router.post("/process_and_store_ticker_data")
 async def process_message(request: Request):
@@ -55,6 +55,7 @@ async def process_message(request: Request):
         ticker = payload.get("ticker", "").upper().strip()
         batch_id = payload.get("batch_id", "")
         force_fresh = payload.get("force_fresh", False)
+        tags = payload.get("tags", [])
     except Exception as e:
         print(f"[Worker] Failed to decode Pub/Sub base64: {e}")
         return Response(content="Acknowledge invalid base64 message", status_code=status.HTTP_200_OK)
@@ -79,7 +80,7 @@ async def process_message(request: Request):
         async with limiter:
             # Execute report generation in secondary threadpool to avoid blocking event loop
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, process_ticker_with_retry, ticker, force_fresh)
+            await loop.run_in_executor(None, process_ticker_with_retry, ticker, force_fresh, tags)
             
         # 3. Success: Update batch completed counts
         db.update_batch_ticker_status(batch_id, ticker, "completed")
