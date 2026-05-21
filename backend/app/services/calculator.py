@@ -51,22 +51,22 @@ class FinancialCalculator:
         safe_avg(10, "10_yr")
         return rates
 
-    def calculate_windage_growth_rate(self, fcf_history: List[Dict[str, Any]]) -> tuple[float, str, Dict[str, Any]]:
-        """Average of 10-year FCF growth rates within 1 std dev."""
-        if len(fcf_history) < 2:
+    def calculate_windage_growth_rate(self, ocf_history: List[Dict[str, Any]]) -> tuple[float, str, Dict[str, Any]]:
+        """Average of 10-year OCF growth rates within 1 std dev."""
+        if len(ocf_history) < 2:
             empty_details = {
                 "steps": [],
                 "stats": {"mean": 0.0, "stdev": 0.0, "lower_bound": 0.0, "upper_bound": 0.0, "is_filtered": False},
                 "final_rate": 0.0
             }
-            return 0.0, "Not enough FCF history.", empty_details
+            return 0.0, "Not enough OCF history.", empty_details
             
         yoy_rates_detailed = []
-        for i in range(1, len(fcf_history)):
-            prev_year = fcf_history[i-1]["year"]
-            curr_year = fcf_history[i]["year"]
-            prev = fcf_history[i-1]["value"]
-            curr = fcf_history[i]["value"]
+        for i in range(1, len(ocf_history)):
+            prev_year = ocf_history[i-1]["year"]
+            curr_year = ocf_history[i]["year"]
+            prev = ocf_history[i-1]["value"]
+            curr = ocf_history[i]["value"]
             if prev > 0:
                 yoy_rates_detailed.append({
                     "from_year": prev_year,
@@ -84,7 +84,7 @@ class FinancialCalculator:
                 "stats": {"mean": 0.0, "stdev": 0.0, "lower_bound": 0.0, "upper_bound": 0.0, "is_filtered": False},
                 "final_rate": 0.0
             }
-            return 0.0, "No valid FCF growth rates.", empty_details
+            return 0.0, "No valid OCF growth rates.", empty_details
             
         if len(yoy_rates) < 3:
             mean = statistics.mean(yoy_rates)
@@ -145,7 +145,7 @@ class FinancialCalculator:
             "final_rate": windage_gr
         }
         
-        rationale = f"Average of 10-year FCF growth rates within 1 standard deviation. Raw rates: {[round(r, 2) for r in yoy_rates]}. Valid average: {windage_gr:.2%}"
+        rationale = f"Average of 10-year OCF growth rates within 1 standard deviation. Raw rates: {[round(r, 2) for r in yoy_rates]}. Valid average: {windage_gr:.2%}"
         return windage_gr, rationale, details
 
     def calculate_10_cap(self, net_income: float, da: float, capex: float, market_cap: float) -> tuple[float, float, str]:

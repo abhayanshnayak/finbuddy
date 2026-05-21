@@ -96,3 +96,43 @@ class DBService:
             self.db.collection('ingestion_batches').document(batch_id).set(data)
         except Exception as e:
             print(f"Firestore save batch failed: {e}")
+
+    def update_batch_ticker_status(self, batch_id: str, ticker: str, status: str, error: str = None):
+        if not self.db:
+            return
+            
+        transaction = self.db.transaction()
+        batch_ref = self.db.collection('ingestion_batches').document(batch_id)
+        
+        @firestore.transactional
+        def update_in_transaction(transaction, batch_ref):
+            snapshot = batch_ref.get(transaction=transaction)
+            if not snapshot.exists:
+                return
+                
+            batch = snapshot.to_dict()
+            if ticker not in batch.get("symbols", {}):
+                return
+                
+            batch["symbols"][ticker]["status"] = status
+            batch["symbols"][ticker]["timestamp"] = datetime.now(pytz.utc).isoformat()
+            if error:
+                batch["symbols"][ticker]["error"] = error
+                
+            completed = sum(1 for sym, data in batch["symbols"].items() if data.get("status") == "completed")
+            failed = sum(1 for sym, data in batch["symbols"].items() if data.get("status") == "failed")
+            
+            batch["completed_count"] = completed
+            batch["failed_count"] = failed
+            
+            if completed + failed == batch.get("total_symbols", 0):
+                batch["status"] = "completed"
+            elif status == "processing" and batch.get("status") == "pending":
+                batch["status"] = "processing"
+                
+            transaction.set(batch_ref, batch)
+            
+        try:
+            update_in_transaction(transaction, batch_ref)
+        except Exception as e:
+            print(f"Transaction failed for batch {batch_id}, ticker {ticker}: {e}")

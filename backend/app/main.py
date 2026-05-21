@@ -122,7 +122,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         fcf_val = ocf_val - abs(capex_val)
         fcf_history.append({"year": year, "value": fcf_val})
 
-    windage_gr, windage_rationale, computation_windage_details = calc.calculate_windage_growth_rate(fcf_history)
+    windage_gr, windage_rationale, computation_windage_details = calc.calculate_windage_growth_rate(history["operating_cash_flow"])
     
     latest_net_income = history["net_income"][-1]["value"] if history["net_income"] else 0
     latest_da = history["da"][-1]["value"] if history["da"] else 0
@@ -284,9 +284,7 @@ def local_background_ingest(batch_id: str, tickers_to_process: List[str], force_
         if not batch:
             break
             
-        batch["symbols"][ticker]["status"] = "processing"
-        batch["status"] = "processing"
-        db.save_batch(batch_id, batch)
+        db.update_batch_ticker_status(batch_id, ticker, "processing")
         
         try:
             # Pause to preserve rate limits (approx 2s between calls)
@@ -294,27 +292,11 @@ def local_background_ingest(batch_id: str, tickers_to_process: List[str], force_
             
             generate_and_cache_report(ticker, finnhub, calc, ai, db, force_fresh=force_fresh)
             
-            # Fetch batch and update to completed
-            batch = db.get_batch(batch_id)
-            if not batch:
-                break
-            batch["symbols"][ticker]["status"] = "completed"
-            batch["completed_count"] += 1
-            if batch["completed_count"] + batch["failed_count"] == batch["total_symbols"]:
-                batch["status"] = "completed"
-            db.save_batch(batch_id, batch)
+            db.update_batch_ticker_status(batch_id, ticker, "completed")
             
         except Exception as e:
             print(f"Local batch processing failed for {ticker}: {e}")
-            batch = db.get_batch(batch_id)
-            if not batch:
-                break
-            batch["symbols"][ticker]["status"] = "failed"
-            batch["symbols"][ticker]["error"] = str(e)
-            batch["failed_count"] += 1
-            if batch["completed_count"] + batch["failed_count"] == batch["total_symbols"]:
-                batch["status"] = "completed"
-            db.save_batch(batch_id, batch)
+            db.update_batch_ticker_status(batch_id, ticker, "failed", error=str(e))
 
 @app.post("/api/batch")
 def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):

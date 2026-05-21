@@ -72,9 +72,7 @@ async def process_message(request: Request):
             print(f"[Worker] Ticker {ticker} is already completed for batch {batch_id}. Skipping.")
             return Response(content="Acknowledge (already completed)", status_code=status.HTTP_200_OK)
             
-        batch["symbols"][ticker]["status"] = "processing"
-        batch["status"] = "processing"
-        db.save_batch(batch_id, batch)
+        db.update_batch_ticker_status(batch_id, ticker, "processing")
         
     # 2. Process with rate limiting & tenacity retries
     try:
@@ -84,27 +82,12 @@ async def process_message(request: Request):
             await loop.run_in_executor(None, process_ticker_with_retry, ticker, force_fresh)
             
         # 3. Success: Update batch completed counts
-        batch = db.get_batch(batch_id)
-        if batch:
-            batch["symbols"][ticker]["status"] = "completed"
-            batch["symbols"][ticker]["timestamp"] = datetime.now(pytz.utc).isoformat()
-            batch["completed_count"] += 1
-            if batch["completed_count"] + batch["failed_count"] == batch["total_symbols"]:
-                batch["status"] = "completed"
-            db.save_batch(batch_id, batch)
+        db.update_batch_ticker_status(batch_id, ticker, "completed")
         print(f"[Worker] Successfully processed {ticker}")
             
     except Exception as e:
         print(f"[Worker] Failed to process {ticker} after retries: {e}")
         # 4. Failure: Mark ticker status as failed and log error
-        batch = db.get_batch(batch_id)
-        if batch:
-            batch["symbols"][ticker]["status"] = "failed"
-            batch["symbols"][ticker]["error"] = str(e)
-            batch["symbols"][ticker]["timestamp"] = datetime.now(pytz.utc).isoformat()
-            batch["failed_count"] += 1
-            if batch["completed_count"] + batch["failed_count"] == batch["total_symbols"]:
-                batch["status"] = "completed"
-            db.save_batch(batch_id, batch)
+        db.update_batch_ticker_status(batch_id, ticker, "failed", error=str(e))
             
     return Response(content="Acknowledge", status_code=status.HTTP_200_OK)
