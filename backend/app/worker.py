@@ -3,7 +3,7 @@ import json
 import asyncio
 from datetime import datetime
 import pytz
-from fastapi import FastAPI, Request, Response, status
+from fastapi import APIRouter, Request, Response, status
 from aiolimiter import AsyncLimiter
 from tenacity import retry, wait_exponential_jitter, stop_after_attempt
 
@@ -13,7 +13,7 @@ from app.services.ai_service import AIService
 from app.services.db_service import DBService
 from app.main import settings, generate_and_cache_report
 
-app = FastAPI(title="Finbuddy Stock Ingestion Worker")
+router = APIRouter()
 
 # Initialize Services
 finnhub = FinnhubClient(api_key=settings.FINNHUB_API_KEY)
@@ -33,7 +33,7 @@ def process_ticker_with_retry(ticker: str, force_fresh: bool):
     print(f"[Worker] Running ingestion for {ticker} (force_fresh={force_fresh})...")
     return generate_and_cache_report(ticker, finnhub, calc, ai, db, force_fresh=force_fresh)
 
-@app.post("/process_and_store_ticker_data")
+@router.post("/process_and_store_ticker_data")
 async def process_message(request: Request):
     try:
         envelope = await request.json()

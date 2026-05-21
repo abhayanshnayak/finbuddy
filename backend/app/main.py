@@ -398,3 +398,7 @@ def get_batch_status(batch_id: str):
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
     return batch
+
+# Include the Pub/Sub worker router
+from app.worker import router as worker_router
+app.include_router(worker_router)
