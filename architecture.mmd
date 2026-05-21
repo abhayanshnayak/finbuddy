@@ -1,0 +1,51 @@
+flowchart TD
+    User(["👤 User"])
+    
+    subgraph Frontend ["Frontend: React SPA"]
+        UI["💻 React UI"]
+        PDF["📄 PDF Generator"]
+    end
+    
+    subgraph GCP ["Google Cloud Platform"]
+        CDN["🌐 Cloud CDN"]
+        Storage["📦 Cloud Storage\n(Static Hosting)"]
+        
+        subgraph Backend ["Backend Services"]
+            API["⚙️ Cloud Run: FastAPI\n(Report API)"]
+            Worker["⚙️ Cloud Run: Ingestion Worker\n(Batch Processor)"]
+        end
+        
+        PubSub["🌐 Cloud Pub/Sub\n(Message Topic)"]
+        DB[("🗄️ Cloud Firestore\n(Report & Cache DB)")]
+    end
+    
+    subgraph External ["External APIs"]
+        FinAPI["📈 Financial APIs\n(Finnhub)"]
+        LLM["🧠 Vertex AI\n(Gemini Pro)"]
+    end
+
+    User -->|Accesses| CDN
+    CDN --> Storage
+    Storage --> UI
+    
+    %% Synchronous Path
+    UI -->|1a. Single Search Query| API
+    API -->|2. Check Cache| DB
+    DB -.->|Cache Miss| API
+    API -->|3a. Fetch Financials| FinAPI
+    API -->|3b. Qualitative Analysis| LLM
+    API -->|4. Store Cached Report| DB
+    API -->|5. Return JSON Report| UI
+    
+    %% Asynchronous Bulk Path
+    UI -->|1b. Start Bulk Import| API
+    API -->|6. Init Batch Doc| DB
+    API -->|7. Publish Tickers| PubSub
+    PubSub -->|8. Push Message| Worker
+    Worker -->|9a. Fetch Financials| FinAPI
+    Worker -->|9b. Qualitative Analysis| LLM
+    Worker -->|10. Store Report & Progress| DB
+    UI -.->|11. Real-time Progress Sync| DB
+    
+    UI -->|Render| PDF
+    PDF -->|Download| User
