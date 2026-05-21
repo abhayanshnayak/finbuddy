@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 const formatLargeNumber = (num) => {
   if (!num) return '0';
   const absNum = Math.abs(num);
+  if (absNum >= 1e12) return (num / 1e12).toFixed(1).replace(/\.0$/, '') + 'T';
   if (absNum >= 1e9) return (num / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
   if (absNum >= 1e6) return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
   if (absNum >= 1e3) return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
@@ -424,7 +425,12 @@ function App() {
 
                   {/* Payback Time Valuation Card */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                    <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Valuations (Payback Time)</h3>
+                    <div className="flex justify-between items-center border-b pb-2">
+                      <h3 className="text-xl font-semibold text-gray-900">Valuations (Payback Time)</h3>
+                      <span className="text-sm font-medium text-gray-500">
+                        Market Cap: <span className="text-gray-900 font-bold">${formatLargeNumber(report.financials.valuations.market_cap)}</span>
+                      </span>
+                    </div>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
                         <div>
@@ -478,7 +484,7 @@ function App() {
                             <svg className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <p className="text-[10px] text-amber-800 leading-relaxed font-medium">
+                            <p className="whitespace-pre-wrap text-[10px] text-amber-800 leading-relaxed font-medium">
                               {report.financials.valuations.computation_payback_details}
                             </p>
                           </div>

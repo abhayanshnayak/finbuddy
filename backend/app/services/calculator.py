@@ -162,7 +162,7 @@ class FinancialCalculator:
         rationale = f"Owner Earnings = Net Income ({net_income}) + D&A ({da}) - CapEx ({capex_val}) = {owner_earnings}. Cap Rate = Owner Earnings / Market Cap = {cap_rate:.2f}."
         return owner_earnings, cap_rate, rationale
 
-    def calculate_payback_time(self, current_fcf: float, windage_gr: float, market_cap: float) -> tuple[int, List[Dict[str, float]], str]:
+    def calculate_payback_time(self, current_fcf: float, windage_gr: float, market_cap: float, fcf_year: str = "TTM") -> tuple[int, List[Dict[str, float]], str]:
         """Method B: Payback Time (FCF)"""
         if current_fcf <= 0:
             return 0, [], "Current FCF is zero or negative."
@@ -178,11 +178,26 @@ class FinancialCalculator:
             
             if accumulated_fcf >= market_cap and payback_years == 0:
                 payback_years = year
+
+        def format_large(num):
+            abs_num = abs(num)
+            if abs_num >= 1e12:
+                return f"{num/1e12:.1f}T"
+            elif abs_num >= 1e9:
+                return f"{num/1e9:.1f}B"
+            elif abs_num >= 1e6:
+                return f"{num/1e6:.1f}M"
+            else:
+                return f"{num:.2f}"
                 
+        rationale = f"1. Start with {fcf_year} Free Cash Flow (FCF) of ${format_large(current_fcf)}.\n"
+        rationale += f"2. Project FCF for the next 10 years by applying the Windage Growth Rate of {windage_gr:.2%}.\n"
+        rationale += f"3. Accumulate these projected FCF values year by year.\n"
+        
         if payback_years == 0:
-            rationale = "Accumulated FCF over 10 years does not reach Market Cap."
+            rationale += f"4. The accumulated FCF over 10 years (${format_large(accumulated_fcf)}) does not reach the Market Cap of ${format_large(market_cap)}."
         else:
-            rationale = f"Accumulated projected FCF reaches Market Cap by Year {payback_years}."
+            rationale += f"4. The accumulated FCF reaches the Market Cap of ${format_large(market_cap)} by Year {payback_years}."
             
         return payback_years, projected_fcf, rationale
 

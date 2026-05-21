@@ -130,6 +130,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
     latest_da = history["da"][-1]["value"] if history["da"] else 0
     latest_capex = history["capex"][-1]["value"] if history["capex"] else 0
     latest_fcf = history["operating_cash_flow"][-1]["value"] - abs(latest_capex) if history["operating_cash_flow"] else 0
+    latest_fcf_year = history["operating_cash_flow"][-1]["year"] if history["operating_cash_flow"] else "TTM"
 
     series_annual = metrics.get("series", {}).get("annual", {})
     roe_history = list(reversed(series_annual.get("roe", [])))
@@ -164,7 +165,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
     roic_averages = calc.calculate_averages(roic_history)
 
     owner_earnings, cap_rate, cap_rationale = calc.calculate_10_cap(latest_net_income, latest_da, latest_capex, market_cap)
-    payback_years, projected_fcf, payback_rationale = calc.calculate_payback_time(latest_fcf, windage_gr, market_cap)
+    payback_years, projected_fcf, payback_rationale = calc.calculate_payback_time(latest_fcf, windage_gr, market_cap, str(latest_fcf_year))
     mos_price, mos_details = calc.calculate_margin_of_safety(latest_eps, windage_gr, windage_pe)
 
     # 4. Prompt AI
@@ -220,7 +221,8 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
                 "computation_payback_details": payback_rationale,
                 "owner_earnings": owner_earnings,
                 "cap_rate": cap_rate,
-                "computation_10_cap": cap_rationale
+                "computation_10_cap": cap_rationale,
+                "market_cap": market_cap
             }
         },
         "qualitative": {
