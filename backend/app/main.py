@@ -51,108 +51,46 @@ class BatchPayload(BaseModel):
     force_fresh: bool = False
     tags: List[str] = []
 
-def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: FinancialCalculator, ai: AIService, db: DBService, force_fresh: bool = False, tags: List[str] = None):
-    ticker = ticker.upper()
-    original_ticker = ticker
-    tags = tags or []
+def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
+    ticker = raw_data.get("ticker", "Unknown")
+    combined_tags = raw_data.get("tags", [])
+    profile = raw_data.get("profile", {})
+    metrics = raw_data.get("metrics", {})
+    financials = raw_data.get("financials", {})
+    ai_analysis = raw_data.get("ai_analysis", {})
+    current_price = raw_data.get("price_at_storage", 0.0)
+    timestamp_pst = raw_data.get("last_updated_pst", "")
     
-    # 1. Check Cache first to make it idempotent and ultra-fast
-    if not force_fresh:
-        cached_data = db.get_company_data(ticker)
-        if (
-            cached_data 
-            and "qualitative" in cached_data 
-            and "management" in cached_data["qualitative"] 
-            and "roic_3_yr_avg" in cached_data["qualitative"]["management"]
-            and "financials" in cached_data
-            and "valuations" in cached_data["financials"]
-            and "computation_pe_details" in cached_data["financials"]["valuations"]
-            and "computation_windage_details" in cached_data["financials"]["valuations"]
-            and "payback_time_years" in cached_data["financials"]["valuations"]
-        ):
-            print(f"Using cached report for {ticker}")
-            existing_tags = cached_data.get("tags", [])
-            combined_tags = list(set(existing_tags + tags))
-            if set(existing_tags) != set(combined_tags):
-                cached_data["tags"] = combined_tags
-                db.save_company_data(ticker, cached_data)
-            return cached_data
-            
-    # Fetch existing to preserve tags even if we're doing a force_fresh
-    existing_data = db.get_company_data(ticker) if force_fresh else cached_data
-    existing_tags = existing_data.get("tags", []) if existing_data else []
-    combined_tags = list(set(existing_tags + tags))
-        
-    # 2. Fetch Data from Finnhub
-    try:
-        profile = finnhub.get_profile(ticker)
-        
-        # Finnhub resolves some tickers to a primary class (e.g., GOOG -> GOOGL)
-        actual_ticker = profile.get("ticker", ticker)
-        
-        # Check cache again just in case the resolved ticker is cached
-        if actual_ticker != ticker and not force_fresh:
-            cached_data = db.get_company_data(actual_ticker)
-            if (
-                cached_data 
-                and "qualitative" in cached_data 
-                and "management" in cached_data["qualitative"] 
-                and "roic_3_yr_avg" in cached_data["qualitative"]["management"]
-                and "financials" in cached_data
-                and "valuations" in cached_data["financials"]
-                and "computation_pe_details" in cached_data["financials"]["valuations"]
-                and "computation_windage_details" in cached_data["financials"]["valuations"]
-                and "payback_time_years" in cached_data["financials"]["valuations"]
-            ):
-                existing_tags_actual = cached_data.get("tags", [])
-                combined_tags_actual = list(set(existing_tags_actual + tags))
-                if set(existing_tags_actual) != set(combined_tags_actual):
-                    cached_data["tags"] = combined_tags_actual
-                    db.save_company_data(actual_ticker, cached_data)
-                db.save_company_data(original_ticker, cached_data)
-                return cached_data
-                
-        # Also grab existing tags for actual ticker if doing a full fresh
-        if force_fresh or not cached_data:
-            existing_data_actual = db.get_company_data(actual_ticker)
-            existing_tags_actual = existing_data_actual.get("tags", []) if existing_data_actual else []
-            combined_tags = list(set(existing_tags_actual + tags))
-        ticker = actual_ticker
-        
-        metrics = finnhub.get_metrics(ticker)
-        financials = finnhub.extract_key_metrics(ticker)
-    except Exception as e:
-        raise Exception(f"Failed to fetch stock data for {ticker}: {e}")
-
-    # 3. Calculate Financials
-    history = financials["history"]
+    history = financials.get("history", {})
+    
     latest_eps = metrics.get("metric", {}).get("epsBasicExclExtraItemsTTM", 0.0)
-    current_price = finnhub.get_quote(ticker).get("c", 0.0)
     shares_out = profile.get("shareOutstanding", 0) * 1000000
     market_cap = current_price * shares_out if shares_out else metrics.get("metric", {}).get("marketCapitalization", 0) * 1000000
 
     growth_rates = {
-        "revenue": list(calc.calculate_growth_rates(history["revenue"]).values()),
-        "net_income": list(calc.calculate_growth_rates(history["net_income"]).values()),
-        "book_value": list(calc.calculate_growth_rates(history["book_value"]).values()),
-        "operating_cash_flow": list(calc.calculate_growth_rates(history["operating_cash_flow"]).values())
+        "revenue": list(calc.calculate_growth_rates(history.get("revenue", [])).values()),
+        "net_income": list(calc.calculate_growth_rates(history.get("net_income", [])).values()),
+        "book_value": list(calc.calculate_growth_rates(history.get("book_value", [])).values()),
+        "operating_cash_flow": list(calc.calculate_growth_rates(history.get("operating_cash_flow", [])).values())
     }
     
     fcf_history = []
-    for i in range(len(history["operating_cash_flow"])):
-        year = history["operating_cash_flow"][i]["year"]
-        ocf_val = history["operating_cash_flow"][i]["value"]
-        capex_val = history["capex"][i]["value"] if i < len(history["capex"]) else 0.0
+    ocf_list = history.get("operating_cash_flow", [])
+    capex_list = history.get("capex", [])
+    for i in range(len(ocf_list)):
+        year = ocf_list[i]["year"]
+        ocf_val = ocf_list[i]["value"]
+        capex_val = capex_list[i]["value"] if i < len(capex_list) else 0.0
         fcf_val = ocf_val - abs(capex_val)
         fcf_history.append({"year": year, "value": fcf_val})
 
-    windage_gr, windage_rationale, computation_windage_details = calc.calculate_windage_growth_rate(history["operating_cash_flow"])
+    windage_gr, windage_rationale, computation_windage_details = calc.calculate_windage_growth_rate(ocf_list)
     
-    latest_net_income = history["net_income"][-1]["value"] if history["net_income"] else 0
-    latest_da = history["da"][-1]["value"] if history["da"] else 0
-    latest_capex = history["capex"][-1]["value"] if history["capex"] else 0
-    latest_fcf = history["operating_cash_flow"][-1]["value"] - abs(latest_capex) if history["operating_cash_flow"] else 0
-    latest_fcf_year = history["operating_cash_flow"][-1]["year"] if history["operating_cash_flow"] else "TTM"
+    latest_net_income = history["net_income"][-1]["value"] if history.get("net_income") else 0
+    latest_da = history["da"][-1]["value"] if history.get("da") else 0
+    latest_capex = capex_list[-1]["value"] if capex_list else 0
+    latest_fcf = ocf_list[-1]["value"] - abs(latest_capex) if ocf_list else 0
+    latest_fcf_year = ocf_list[-1]["year"] if ocf_list else "TTM"
 
     series_annual = metrics.get("series", {}).get("annual", {})
     roe_history = list(reversed(series_annual.get("roe", [])))
@@ -190,16 +128,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
     payback_years, projected_fcf, payback_rationale = calc.calculate_payback_time(latest_fcf, windage_gr, market_cap, str(latest_fcf_year))
     mos_price, mos_details = calc.calculate_margin_of_safety(latest_eps, windage_gr, windage_pe)
 
-    # 4. Prompt AI
-    ai_analysis = ai.analyze_qualitative(profile.get("name", ticker), profile, metrics)
-
-    # Generate timestamp in PST
-    pst_tz = pytz.timezone('US/Pacific')
-    fetched_at = datetime.now(pytz.utc).astimezone(pst_tz)
-    timestamp_pst = fetched_at.strftime("%-d %b %I:%M%p").lower()
-
-    # 5. Build Final JSON Schema
-    report_data = {
+    return {
         "ticker": ticker,
         "tags": combined_tags,
         "name": profile.get("name", ticker),
@@ -212,15 +141,15 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         "last_updated_pst": timestamp_pst,
         "financials": {
             "raw_data": {
-                "revenue_history": history["revenue"],
-                "net_income_history": history["net_income"],
-                "book_value_history": history["book_value"],
-                "operating_cash_flow_history": history["operating_cash_flow"],
-                "eps_history": history["eps"],
+                "revenue_history": history.get("revenue", []),
+                "net_income_history": history.get("net_income", []),
+                "book_value_history": history.get("book_value", []),
+                "operating_cash_flow_history": ocf_list,
+                "eps_history": history.get("eps", []),
                 "roe_history": roe_history,
                 "roic_history": roic_history,
-                "total_debt": financials["latest_total_debt"],
-                "cash_and_equivalents": financials["latest_cash"]
+                "total_debt": financials.get("latest_total_debt", 0),
+                "cash_and_equivalents": financials.get("latest_cash", 0)
             },
             "derived_metrics": {
                 "growth_rates_1_3_5_10_yr": growth_rates,
@@ -228,7 +157,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
                 "windage_growth_rate": windage_gr,
                 "computation_windage": windage_rationale,
                 "computation_windage_details": computation_windage_details,
-                "debt_payoff_years": financials["latest_total_debt"] / latest_fcf if latest_fcf > 0 else 0,
+                "debt_payoff_years": financials.get("latest_total_debt", 0) / latest_fcf if latest_fcf > 0 else 0,
                 "computation_debt_payoff": f"Total Debt / Current Annual FCF"
             },
             "valuations": {
@@ -269,12 +198,94 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         }
     }
 
-    # 6. Save to Cache
-    db.save_company_data(ticker, report_data)
-    if original_ticker != ticker:
-        db.save_company_data(original_ticker, report_data)
+def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: FinancialCalculator, ai: AIService, db: DBService, force_fresh: bool = False, tags: List[str] = None):
+    ticker = ticker.upper()
+    original_ticker = ticker
+    tags = tags or []
+    
+    # 1. Check Cache first to make it idempotent and ultra-fast
+    if not force_fresh:
+        cached_data = db.get_company_data(ticker)
+        if cached_data and "ai_analysis" in cached_data and "financials" in cached_data:
+            print(f"Using cached report for {ticker}")
+            existing_tags = cached_data.get("tags", [])
+            combined_tags = list(set(existing_tags + tags))
+            if set(existing_tags) != set(combined_tags):
+                cached_data["tags"] = combined_tags
+                db.save_company_data(ticker, cached_data)
+            return compute_report_from_raw(cached_data, calc)
+            
+    # Fetch existing to preserve tags even if we're doing a force_fresh
+    existing_data = db.get_company_data(ticker) if force_fresh else cached_data
+    existing_tags = existing_data.get("tags", []) if existing_data else []
+    combined_tags = list(set(existing_tags + tags))
+        
+    # 2. Fetch Data from Finnhub
+    try:
+        profile = finnhub.get_profile(ticker)
+        
+        # Finnhub resolves some tickers to a primary class (e.g., GOOG -> GOOGL)
+        actual_ticker = profile.get("ticker", ticker)
+        
+        # Check cache again just in case the resolved ticker is cached
+        if actual_ticker != ticker and not force_fresh:
+            cached_data = db.get_company_data(actual_ticker)
+            if cached_data and "ai_analysis" in cached_data and "financials" in cached_data:
+                existing_tags_actual = cached_data.get("tags", [])
+                combined_tags_actual = list(set(existing_tags_actual + tags))
+                if set(existing_tags_actual) != set(combined_tags_actual):
+                    cached_data["tags"] = combined_tags_actual
+                    db.save_company_data(actual_ticker, cached_data)
+                db.save_company_data(original_ticker, cached_data)
+                return compute_report_from_raw(cached_data, calc)
+                
+        # Also grab existing tags for actual ticker if doing a full fresh
+        if force_fresh or not cached_data:
+            existing_data_actual = db.get_company_data(actual_ticker)
+            existing_tags_actual = existing_data_actual.get("tags", []) if existing_data_actual else []
+            combined_tags = list(set(existing_tags_actual + tags))
+        ticker = actual_ticker
+        
+        metrics = finnhub.get_metrics(ticker)
+        financials = finnhub.extract_key_metrics(ticker)
+    except Exception as e:
+        raise Exception(f"Failed to fetch stock data for {ticker}: {e}")
 
-    return report_data
+    # 3. Prompt AI
+    ai_analysis = ai.analyze_qualitative(profile.get("name", ticker), profile, metrics)
+
+    current_price = finnhub.get_quote(ticker).get("c", 0.0)
+
+    # Generate timestamp in PST
+    pst_tz = pytz.timezone('US/Pacific')
+    fetched_at = datetime.now(pytz.utc).astimezone(pst_tz)
+    timestamp_pst = fetched_at.strftime("%-d %b %I:%M%p").lower()
+
+    # 4. Build Final Raw JSON Schema
+    raw_data = {
+        "ticker": ticker,
+        "tags": combined_tags,
+        "name": profile.get("name", ticker),
+        "industry": profile.get("finnhubIndustry", "Unknown"),
+        "price_at_storage": current_price,
+        "last_updated_pst": timestamp_pst,
+        "profile": profile,
+        "metrics": metrics,
+        "financials": financials,
+        "ai_analysis": ai_analysis
+    }
+
+    # 5. Save Raw to Cache
+    db.save_company_data(ticker, raw_data)
+    if original_ticker != ticker:
+        db.save_company_data(original_ticker, raw_data)
+
+    return compute_report_from_raw(raw_data, calc)
+
+@app.get("/api/companies")
+def get_all_companies():
+    companies = db.list_companies()
+    return companies
 
 @app.get("/api/report/{ticker}")
 def get_report(ticker: str, force_fresh: bool = False):
@@ -284,18 +295,8 @@ def get_report(ticker: str, force_fresh: bool = False):
     # 1. Check Cache
     if not force_fresh:
         cached_data = db.get_company_data(ticker)
-        if (
-            cached_data 
-            and "qualitative" in cached_data 
-            and "management" in cached_data["qualitative"] 
-            and "roic_3_yr_avg" in cached_data["qualitative"]["management"]
-            and "financials" in cached_data
-            and "valuations" in cached_data["financials"]
-            and "computation_pe_details" in cached_data["financials"]["valuations"]
-            and "computation_windage_details" in cached_data["financials"]["valuations"]
-            and "payback_time_years" in cached_data["financials"]["valuations"]
-        ):
-            return cached_data
+        if cached_data and "ai_analysis" in cached_data and "financials" in cached_data:
+            return compute_report_from_raw(cached_data, calc)
 
     # Generate and return
     try:
@@ -358,15 +359,7 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
     for ticker in raw_tickers:
         if not payload.force_fresh:
             cached = db.get_company_data(ticker)
-            if (
-                cached 
-                and "qualitative" in cached 
-                and "management" in cached["qualitative"] 
-                and "roic_3_yr_avg" in cached["qualitative"]["management"]
-                and "financials" in cached
-                and "valuations" in cached["financials"]
-                and "payback_time_years" in cached["financials"]["valuations"]
-            ):
+            if cached and "ai_analysis" in cached and "financials" in cached:
                 existing_tags_cached = cached.get("tags", [])
                 combined_tags_cached = list(set(existing_tags_cached + payload.tags))
                 if set(existing_tags_cached) != set(combined_tags_cached):
