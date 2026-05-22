@@ -286,16 +286,30 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               ]
             }
             ```
-        *   **Subcollection:** `context` -> **Document:** `growth_company_analysis` (Generated on-demand via growth-analysis endpoint)
-            ```json
-            {
-              "generated_at": "2026-05-22T10:00:00Z",
-              "cash_burn_analysis": "The cash burn is heavily skewed towards R&D and aggressive market expansion rather than structural deficits...",
-              "gross_margin_analysis": "Gross margins remain high at 75%, providing strong operating leverage for future profitability...",
-              "path_to_profitability": "Assuming SG&A scales logarithmically relative to revenue, they project positive OCF by 2028...",
-              "runway_analysis": "With $4.2B in cash and a burn rate of $600M/yr, they have roughly 7 years of runway..."
-            }
-            ```
+        *   **Subcollection:** `context` -> **Document:** `growth_company_analysis`
+#### `growth_company_analysis` Object (JSON)
+*Stored inside `context`*
+```json
+{
+  "cash_burn": {
+      "verdict": "Pass",
+      "justification": "Detailed explanation..."
+  },
+  "gross_margin": {
+      "verdict": "Warning",
+      "justification": "Detailed explanation..."
+  },
+  "profitability_path": {
+      "verdict": "Fail",
+      "justification": "Detailed explanation..."
+  },
+  "runway": {
+      "verdict": "Pass",
+      "justification": "Detailed explanation..."
+  },
+  "generated_at": "2026-05-22T10:00:00Z"
+}
+```
 *   **Pros:**
     *   **Serverless:** Scales to zero, aligns perfectly with Cloud Run.
     *   **Schema-less:** Does not require pre-defined tables or columns. When the Python backend receives varying, deeply nested JSON responses from Finnhub (where established companies have 10 years of data but recent IPOs have 1 year), it can dump the raw JSON straight into the database as a Document without breaking a strict schema.

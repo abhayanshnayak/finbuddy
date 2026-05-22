@@ -115,18 +115,32 @@ class AIService:
             return {"error": "AI Studio not initialized."}
 
         prompt = f"""
-        You are an expert financial analyst and professional value investor specializing in growth companies.
+        You are an exceptionally strict, highly critical financial analyst and professional value investor specializing in growth companies.
         Analyze the company: {company_name}.
         Financial Context Data: {json.dumps(context_data)}
 
-        Please conduct an exceptionally thorough qualitative analysis of the company's growth metrics, runway, and path to profitability based on the provided financial context data.
+        Please conduct an exceptionally thorough, skeptical, and quantitative qualitative analysis of the company's growth metrics, runway, and path to profitability based on the provided financial context data. Do NOT be lenient. If the numbers do not clearly support a healthy trajectory, you must fail them.
         
-        Provide the analysis in JSON format exactly matching this structure:
+        CRITICAL FORMATTING RULE: When citing any financial figures (revenue, cash flow, debt, cash, etc.) in your justifications, you MUST format and round them to millions (M) or billions (B) to make them simple to read. For example, write $11.2B instead of 11200000000, and $456M instead of 456000000.
+        
+        Provide the analysis in JSON format exactly matching this structure, explicitly including numbers and financial rationale in every justification:
         {{
-            "cash_burn_analysis": "Is the cash burn funding structural deficits (bad) or aggressive growth/R&D (good)? Provide a detailed explanation.",
-            "gross_margin_analysis": "Are the gross margins high enough to support future profitability? Explain the margin trajectory.",
-            "path_to_profitability": "Is there a clear, mathematically sound 'path to profitability' in the next 3-5 years? Analyze revenue growth vs operating expense growth.",
-            "runway_analysis": "Do they have enough cash on the balance sheet (runway) to survive until they turn cash-flow positive without needing highly dilutive funding? Calculate estimated runway based on latest cash and FCF/burn rate."
+            "cash_burn": {{
+                "verdict": "Pass, Warning, or Fail",
+                "justification": "Is the cash burn funding structural deficits (bad) or aggressive growth/R&D (good)? Provide a highly critical, detailed justification using exact numbers from the context."
+            }},
+            "gross_margin": {{
+                "verdict": "Pass, Warning, or Fail",
+                "justification": "Are the gross margins high enough to support future profitability? Explain the margin trajectory with specific numbers."
+            }},
+            "profitability_path": {{
+                "verdict": "Pass, Warning, or Fail",
+                "justification": "Is there a clear, mathematically sound 'path to profitability' in the next 3-5 years? Analyze revenue growth vs operating expense growth using specific figures. Be highly skeptical."
+            }},
+            "runway": {{
+                "verdict": "Pass, Warning, or Fail",
+                "justification": "Do they have enough cash on the balance sheet (runway) to survive until they turn cash-flow positive without needing highly dilutive funding? Calculate estimated runway in months/years based on latest cash and FCF/burn rate."
+            }}
         }}
 
         Return ONLY the raw JSON object. Do not include markdown code blocks.

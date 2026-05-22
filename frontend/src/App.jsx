@@ -71,7 +71,7 @@ function App() {
         setLoadingGrowthAnalysis(true);
         try {
           const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-          const response = await fetch(`${apiBase}/api/stocks/${ticker}/growth-analysis`);
+          const response = await fetch(`${apiBase}/api/stocks/${ticker}/growth-analysis?force_fresh=${singleForceFresh}`);
           if (response.ok) {
             const data = await response.json();
             setGrowthAnalysis(data);
@@ -972,32 +972,71 @@ function App() {
                   ) : growthAnalysis ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                       <div className="space-y-1.5 p-4 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-xl">🔥</span>
-                          <span className="font-bold text-gray-800 text-sm">Cash Burn Strategy</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xl">🔥</span>
+                            <span className="font-bold text-gray-800 text-sm">Cash Burn Strategy</span>
+                          </div>
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
+                            growthAnalysis.cash_burn?.verdict === 'Pass' ? 'bg-emerald-100 text-emerald-800' :
+                            growthAnalysis.cash_burn?.verdict === 'Warning' ? 'bg-amber-100 text-amber-800' :
+                            'bg-rose-100 text-rose-800'
+                          }`}>
+                            {growthAnalysis.cash_burn?.verdict || 'N/A'}
+                          </span>
                         </div>
-                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.cash_burn_analysis}</p>
+                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.cash_burn?.justification || growthAnalysis.cash_burn_analysis}</p>
                       </div>
+                      
                       <div className="space-y-1.5 p-4 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-xl">📈</span>
-                          <span className="font-bold text-gray-800 text-sm">Margin Trajectory</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xl">📈</span>
+                            <span className="font-bold text-gray-800 text-sm">Margin Trajectory</span>
+                          </div>
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
+                            growthAnalysis.gross_margin?.verdict === 'Pass' ? 'bg-emerald-100 text-emerald-800' :
+                            growthAnalysis.gross_margin?.verdict === 'Warning' ? 'bg-amber-100 text-amber-800' :
+                            'bg-rose-100 text-rose-800'
+                          }`}>
+                            {growthAnalysis.gross_margin?.verdict || 'N/A'}
+                          </span>
                         </div>
-                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.gross_margin_analysis}</p>
+                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.gross_margin?.justification || growthAnalysis.gross_margin_analysis}</p>
                       </div>
+
                       <div className="space-y-1.5 p-4 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-xl">🎯</span>
-                          <span className="font-bold text-gray-800 text-sm">Path to Profitability</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xl">🎯</span>
+                            <span className="font-bold text-gray-800 text-sm">Path to Profitability</span>
+                          </div>
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
+                            growthAnalysis.profitability_path?.verdict === 'Pass' ? 'bg-emerald-100 text-emerald-800' :
+                            growthAnalysis.profitability_path?.verdict === 'Warning' ? 'bg-amber-100 text-amber-800' :
+                            'bg-rose-100 text-rose-800'
+                          }`}>
+                            {growthAnalysis.profitability_path?.verdict || 'N/A'}
+                          </span>
                         </div>
-                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.path_to_profitability}</p>
+                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.profitability_path?.justification || growthAnalysis.path_to_profitability}</p>
                       </div>
+
                       <div className="space-y-1.5 p-4 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-xl">⏳</span>
-                          <span className="font-bold text-gray-800 text-sm">Runway Analysis</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xl">⏳</span>
+                            <span className="font-bold text-gray-800 text-sm">Runway Analysis</span>
+                          </div>
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
+                            growthAnalysis.runway?.verdict === 'Pass' ? 'bg-emerald-100 text-emerald-800' :
+                            growthAnalysis.runway?.verdict === 'Warning' ? 'bg-amber-100 text-amber-800' :
+                            'bg-rose-100 text-rose-800'
+                          }`}>
+                            {growthAnalysis.runway?.verdict || 'N/A'}
+                          </span>
                         </div>
-                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.runway_analysis}</p>
+                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.runway?.justification || growthAnalysis.runway_analysis}</p>
                       </div>
                     </div>
                   ) : (
