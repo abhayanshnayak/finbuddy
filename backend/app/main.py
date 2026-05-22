@@ -115,7 +115,8 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     if last_5_pe_values:
         max_pe_5yr = max(last_5_pe_values)
     else:
-        max_pe_5yr = metrics.get("metric", {}).get("peExclExtraTTM", 15.0)
+        pe_excl_extra = metrics.get("metric", {}).get("peExclExtraTTM")
+        max_pe_5yr = pe_excl_extra if pe_excl_extra is not None else 15.0
         
     windage_pe = min(max_pe_5yr, windage_gr * 100 * 2)
     
