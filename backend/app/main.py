@@ -86,6 +86,17 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
 
     windage_gr, windage_rationale, computation_windage_details = calc.calculate_windage_growth_rate(ocf_list)
     
+    windage_fallback_message = None
+    if windage_gr < 0:
+        ni_10_yr_cagr = growth_rates["net_income"][3] if len(growth_rates["net_income"]) > 3 else 0.0
+        windage_gr = ni_10_yr_cagr
+        windage_rationale = f"Windage growth rate was negative, so the 10-year Net Income growth rate ({windage_gr:.2%}) was used instead."
+        computation_windage_details = {
+            "steps": [],
+            "stats": {"mean": windage_gr, "stdev": 0.0, "lower_bound": windage_gr, "upper_bound": windage_gr, "is_filtered": False},
+            "final_rate": windage_gr
+        }
+        windage_fallback_message = "The 10-year Net Income average was used for the windage growth."    
     latest_net_income = history["net_income"][-1]["value"] if history.get("net_income") else 0
     latest_da = history["da"][-1]["value"] if history.get("da") else 0
     latest_capex = capex_list[-1]["value"] if capex_list else 0
@@ -174,7 +185,8 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
                 "owner_earnings": owner_earnings,
                 "cap_rate": cap_rate,
                 "computation_10_cap": cap_rationale,
-                "market_cap": market_cap
+                "market_cap": market_cap,
+                "windage_fallback_message": windage_fallback_message
             }
         },
         "qualitative": {

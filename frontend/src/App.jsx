@@ -393,6 +393,12 @@ function App() {
                   {/* Valuations Card */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                     <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Valuations (Margin of Safety)</h3>
+                    {report.financials.valuations.windage_fallback_message && (
+                      <div className="bg-blue-50 text-blue-800 text-xs font-semibold px-3 py-2 rounded-lg border border-blue-100 flex items-center space-x-2">
+                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span>{report.financials.valuations.windage_fallback_message}</span>
+                      </div>
+                    )}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-xl border border-green-100">
                         <div>
@@ -448,6 +454,12 @@ function App() {
                         Market Cap: <span className="text-gray-900 font-bold">${formatLargeNumber(report.financials.valuations.market_cap)}</span>
                       </span>
                     </div>
+                    {report.financials.valuations.windage_fallback_message && (
+                      <div className="bg-blue-50 text-blue-800 text-xs font-semibold px-3 py-2 rounded-lg border border-blue-100 flex items-center space-x-2">
+                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span>{report.financials.valuations.windage_fallback_message}</span>
+                      </div>
+                    )}
                     <div className="space-y-3">
                       <div className="flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
                         <div>
