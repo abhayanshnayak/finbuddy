@@ -123,7 +123,9 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               "computation_roic": "Sum of last 3, 5, 10 years ROIC from raw_data / N.",
               "computation_roe": "Sum of last 3, 5, 10 years ROE from raw_data / N.",
               "debt_payoff_years": 1.1,
-              "computation_debt_payoff": "Total Debt (111B) / Current Annual FCF (110.1B)."
+              "computation_debt_payoff": "Total Debt (111B) / Current Annual FCF (110.1B).",
+              "rule_of_40": 45.2,
+              "ev_to_revenue": 8.5
             }
             ```
         *   **Subcollection:** `financials` -> **Document:** `valuations`

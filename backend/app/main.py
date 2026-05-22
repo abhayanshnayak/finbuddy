@@ -136,6 +136,26 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     roe_averages = calc.calculate_averages(roe_history)
     roic_averages = calc.calculate_averages(roic_history)
 
+    # Rule of 40 and EV/Revenue
+    rev_list = history.get("revenue", [])
+    if len(rev_list) >= 2 and rev_list[-2]["value"] > 0:
+        latest_revenue = rev_list[-1]["value"]
+        latest_revenue_year = rev_list[-1]["year"]
+        previous_revenue = rev_list[-2]["value"]
+        revenue_growth_1yr = (latest_revenue / previous_revenue) - 1
+    else:
+        latest_revenue = rev_list[-1]["value"] if len(rev_list) >= 1 else 0
+        latest_revenue_year = rev_list[-1]["year"] if len(rev_list) >= 1 else "TTM"
+        revenue_growth_1yr = 0.0
+
+    fcf_margin = latest_fcf / latest_revenue if latest_revenue > 0 else 0.0
+    rule_of_40 = (revenue_growth_1yr + fcf_margin) * 100
+
+    cash_and_equivalents = financials.get("latest_cash", 0)
+    total_debt = financials.get("latest_total_debt", 0)
+    enterprise_value = market_cap + total_debt - cash_and_equivalents
+    ev_to_revenue = enterprise_value / latest_revenue if latest_revenue > 0 else 0.0
+
     owner_earnings, cap_rate, cap_rationale = calc.calculate_10_cap(latest_net_income, latest_da, latest_capex, market_cap)
     payback_years, projected_fcf, payback_rationale = calc.calculate_payback_time(latest_fcf, windage_gr, market_cap, str(latest_fcf_year))
     mos_price, mos_details = calc.calculate_margin_of_safety(latest_eps, windage_gr, windage_pe)
@@ -170,7 +190,23 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
                 "computation_windage": windage_rationale,
                 "computation_windage_details": computation_windage_details,
                 "debt_payoff_years": financials.get("latest_total_debt", 0) / latest_fcf if latest_fcf > 0 else 0,
-                "computation_debt_payoff": f"Total Debt / Current Annual FCF"
+                "computation_debt_payoff": f"Total Debt / Current Annual FCF",
+                "rule_of_40": rule_of_40,
+                "computation_rule_of_40_details": {
+                    "revenue_growth_1yr": revenue_growth_1yr,
+                    "fcf_margin": fcf_margin,
+                    "latest_revenue": latest_revenue,
+                    "latest_fcf": latest_fcf,
+                    "latest_year": str(latest_revenue_year),
+                    "explanation": "Score > 40 indicates a healthy balance of growth and profitability."
+                },
+                "ev_to_revenue": ev_to_revenue,
+                "computation_ev_to_revenue_details": {
+                    "enterprise_value": enterprise_value,
+                    "latest_revenue": latest_revenue,
+                    "latest_year": str(latest_revenue_year),
+                    "explanation": "Measures how much it costs to buy the company's sales."
+                }
             },
             "valuations": {
                 "margin_of_safety_price": mos_price,

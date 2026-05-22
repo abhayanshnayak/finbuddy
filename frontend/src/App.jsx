@@ -531,6 +531,51 @@ function App() {
                     </div>
                   </div>
 
+                  {/* Alternative Metrics */}
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 md:col-span-2">
+                    <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Alternative Valuation Metrics</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex flex-col space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-semibold text-gray-700">Rule of 40 ({report.financials.derived_metrics.computation_rule_of_40_details?.latest_year})</p>
+                            <p className="text-[10px] text-gray-500">Revenue Growth + FCF Margin</p>
+                          </div>
+                          <span className={`text-xl font-bold font-mono ${report.financials.derived_metrics.rule_of_40 >= 40 ? 'text-green-600' : 'text-amber-600'}`}>
+                            {report.financials.derived_metrics.rule_of_40?.toFixed(1)}
+                          </span>
+                        </div>
+                        {report.financials.derived_metrics.computation_rule_of_40_details && (
+                          <div className="text-[10px] text-gray-500 bg-white p-2 rounded border border-gray-100">
+                            <p className="mb-1">{report.financials.derived_metrics.computation_rule_of_40_details.explanation}</p>
+                            <p className="font-mono text-gray-600">
+                              {(report.financials.derived_metrics.computation_rule_of_40_details.revenue_growth_1yr * 100).toFixed(1)}% <span className="text-[9px] text-gray-400">(Rev: ${formatLargeNumber(report.financials.derived_metrics.computation_rule_of_40_details.latest_revenue)})</span> + {(report.financials.derived_metrics.computation_rule_of_40_details.fcf_margin * 100).toFixed(1)}% <span className="text-[9px] text-gray-400">(FCF: ${formatLargeNumber(report.financials.derived_metrics.computation_rule_of_40_details.latest_fcf)})</span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex flex-col space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-semibold text-gray-700">EV / Revenue ({report.financials.derived_metrics.computation_ev_to_revenue_details?.latest_year})</p>
+                            <p className="text-[10px] text-gray-500">Enterprise Value to Sales</p>
+                          </div>
+                          <span className="text-xl font-bold font-mono text-gray-700">
+                            {report.financials.derived_metrics.ev_to_revenue?.toFixed(2)}x
+                          </span>
+                        </div>
+                        {report.financials.derived_metrics.computation_ev_to_revenue_details && (
+                          <div className="text-[10px] text-gray-500 bg-white p-2 rounded border border-gray-100">
+                            <p className="mb-1">{report.financials.derived_metrics.computation_ev_to_revenue_details.explanation}</p>
+                            <p className="font-mono text-gray-600">
+                              EV: ${formatLargeNumber(report.financials.derived_metrics.computation_ev_to_revenue_details.enterprise_value)} / Rev: ${formatLargeNumber(report.financials.derived_metrics.computation_ev_to_revenue_details.latest_revenue)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Core Growth Indicators */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 md:col-span-2">
                     <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Big 4 Growth Rates</h3>

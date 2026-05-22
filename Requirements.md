@@ -34,12 +34,16 @@ The generated report must include the following sections and data points:
   - Financial resilience: Cash available, Number of years it can withstand an economic downturn.
 - **Market Sentiment:** Who is buying the stock (e.g., specific gurus or institutional trends).
 
-#### B. Core Growth Indicators (The "Big 4" Numbers)
+#### B. Core Growth Indicators (The "Big 4" Numbers) & Alternative Metrics
 The app must retrieve and calculate historical growth rates to display a table with **3-year, 5-year, and 10-year** averages for:
 - Revenue (Sales)
 - Net Income
 - Book Value (Equity + Dividends)
 - Operating Cash Flow
+
+Additionally, compute and display:
+- **Rule of 40:** Revenue Growth Rate + Free Cash Flow Margin.
+- **EV/Revenue (Enterprise Value to Revenue):** Enterprise Value / Latest Revenue.
 
 #### C. Management Quality Metrics
 The app must retrieve and calculate data to evaluate management performance, displaying **3-year, 5-year, and 10-year** metrics for:
