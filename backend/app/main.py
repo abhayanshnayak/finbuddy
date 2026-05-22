@@ -218,7 +218,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
     # 1. Check Cache first to make it idempotent and ultra-fast
     if not force_fresh:
         cached_data = db.get_company_data(ticker)
-        if cached_data and "ai_analysis" in cached_data and "financials" in cached_data:
+        if cached_data and "ai_analysis" in cached_data and "financials" in cached_data and "error" not in cached_data["ai_analysis"]:
             print(f"Using cached report for {ticker}")
             existing_tags = cached_data.get("tags", [])
             combined_tags = list(set(existing_tags + tags))
@@ -242,7 +242,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         # Check cache again just in case the resolved ticker is cached
         if actual_ticker != ticker and not force_fresh:
             cached_data = db.get_company_data(actual_ticker)
-            if cached_data and "ai_analysis" in cached_data and "financials" in cached_data:
+            if cached_data and "ai_analysis" in cached_data and "financials" in cached_data and "error" not in cached_data["ai_analysis"]:
                 existing_tags_actual = cached_data.get("tags", [])
                 combined_tags_actual = list(set(existing_tags_actual + tags))
                 if set(existing_tags_actual) != set(combined_tags_actual):
@@ -265,6 +265,13 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
 
     # 3. Prompt AI
     ai_analysis = ai.analyze_qualitative(profile.get("name", ticker), profile, metrics)
+    
+    if "error" in ai_analysis:
+        if existing_data and "ai_analysis" in existing_data and "error" not in existing_data["ai_analysis"]:
+            print(f"AI generation failed, falling back to cached AI analysis for {ticker}")
+            ai_analysis = existing_data["ai_analysis"]
+        else:
+            raise Exception(f"AI generation failed: {ai_analysis['error']}")
 
     current_price = finnhub.get_quote(ticker).get("c", 0.0)
 
@@ -307,7 +314,7 @@ def get_report(ticker: str, force_fresh: bool = False):
     # 1. Check Cache
     if not force_fresh:
         cached_data = db.get_company_data(ticker)
-        if cached_data and "ai_analysis" in cached_data and "financials" in cached_data:
+        if cached_data and "ai_analysis" in cached_data and "financials" in cached_data and "error" not in cached_data["ai_analysis"]:
             return compute_report_from_raw(cached_data, calc)
 
     # Generate and return
@@ -371,7 +378,7 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
     for ticker in raw_tickers:
         if not payload.force_fresh:
             cached = db.get_company_data(ticker)
-            if cached and "ai_analysis" in cached and "financials" in cached:
+            if cached and "ai_analysis" in cached and "financials" in cached and "error" not in cached["ai_analysis"]:
                 existing_tags_cached = cached.get("tags", [])
                 combined_tags_cached = list(set(existing_tags_cached + payload.tags))
                 if set(existing_tags_cached) != set(combined_tags_cached):
@@ -413,7 +420,10 @@ def start_batch(payload: BatchPayload, background_tasks: BackgroundTasks):
     
     # Publish remaining tasks to Pub/Sub
     published_successfully = 0
-    if publisher and topic_path:
+    import os
+    is_cloud_run = os.environ.get("K_SERVICE") is not None
+    
+    if publisher and topic_path and is_cloud_run:
         try:
             for ticker in tickers_to_process:
                 msg_bytes = json.dumps({"ticker": ticker, "batch_id": batch_id, "force_fresh": payload.force_fresh, "tags": payload.tags}).encode("utf-8")

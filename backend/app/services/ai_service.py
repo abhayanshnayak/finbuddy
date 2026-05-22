@@ -81,17 +81,28 @@ class AIService:
         Return ONLY the raw JSON object. Do not include markdown code blocks.
         """
         
-        try:
-            response = self.client.models.generate_content(
-                model="gemini-3.1-pro-preview",
-                contents=prompt
-            )
-            text = response.text.strip()
-            if text.startswith("```json"):
-                text = text[7:]
-            if text.endswith("```"):
-                text = text[:-3]
-            return json.loads(text)
-        except Exception as e:
-            print(f"AI Studio Generation Failed: {e}.")
-            return {"error": f"AI Studio Generation Failed: {e}"}
+        models_to_try = [
+            "gemini-3.1-pro-preview",
+            "gemini-3.5-flash",
+            "gemini-3.1-flash-lite"
+        ]
+        
+        last_error = None
+        for model_name in models_to_try:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                text = response.text.strip()
+                if text.startswith("```json"):
+                    text = text[7:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                return json.loads(text)
+            except Exception as e:
+                print(f"AI Studio Generation Failed with {model_name}: {e}")
+                last_error = e
+                continue
+                
+        return {"error": f"AI Studio Generation Failed across all models. Last error: {last_error}"}
