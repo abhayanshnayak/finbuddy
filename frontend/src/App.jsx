@@ -374,6 +374,15 @@ function App() {
                     <p className="text-gray-500 mt-1 font-medium">
                       {report.industry} | <span className="text-blue-600">{report.sector}</span> | <span className="text-indigo-600">{report.subsector}</span> | <span className="text-emerald-600">{report.industry_group}</span>
                     </p>
+                    {report.tags && report.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3 mb-1">
+                        {report.tags.map((tag, idx) => (
+                          <span key={idx} className="px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-semibold rounded-lg border border-purple-200">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center space-x-4 mt-2">
                       <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-3 py-1 rounded-full shadow-sm">
                         Price at Analysis: <span className="text-gray-900">${report.price_at_storage?.toFixed(2)}</span>
