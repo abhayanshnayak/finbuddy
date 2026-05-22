@@ -226,7 +226,7 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
         *   **Subcollection:** `context` -> **Document:** `market_and_bias`
             ```json
             {
-              "gurus_buying": ["Warren Buffett", "Ray Dalio"],
+              "gurus_buying": ["Warren Buffett", "Bill Ackman"],
               "bias_checklist": [
                 {
                   "question": "Are we outside the circle of competence?",
@@ -236,7 +236,7 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
                 {
                   "question": "Is the industry declining?",
                   "answer": false,
-                  "rationale": "Smartphones and tech wearables are still growing globally, albeit at a mature rate."
+                  "rationale": "Digital advertising continues to grow globally."
                 },
                 {
                   "question": "Are the Big 4 numbers failing to grow?",
@@ -284,6 +284,16 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
                   "rationale": "Current antitrust lawsuits are a threat but unlikely to be an existential, permanent damage event."
                 }
               ]
+            }
+            ```
+        *   **Subcollection:** `context` -> **Document:** `growth_company_analysis` (Generated on-demand via growth-analysis endpoint)
+            ```json
+            {
+              "generated_at": "2026-05-22T10:00:00Z",
+              "cash_burn_analysis": "The cash burn is heavily skewed towards R&D and aggressive market expansion rather than structural deficits...",
+              "gross_margin_analysis": "Gross margins remain high at 75%, providing strong operating leverage for future profitability...",
+              "path_to_profitability": "Assuming SG&A scales logarithmically relative to revenue, they project positive OCF by 2028...",
+              "runway_analysis": "With $4.2B in cash and a burn rate of $600M/yr, they have roughly 7 years of runway..."
             }
             ```
 *   **Pros:**
@@ -421,6 +431,13 @@ To monitor bulk execution in real-time, the system will use the following Firest
 ---
 
 ## References & Glossary
+
+### 2. Backend Engine (Python / FastAPI)
+- **Framework:** FastAPI for rapid REST API development.
+- **AI Integration:** Uses Gemini (AI Studio API) to parse filings and generate insights.
+- **Endpoints:**
+  - `GET /api/stocks/{ticker}`: Triggers the multi-stage ingestion, analysis, and metric calculation pipeline, returning a combined JSON report.
+  - `GET /api/stocks/{ticker}/growth-analysis`: Checks the database for existing growth analysis. If not found, uses Gemini to analyze growth metrics (cash burn, margins, runway, path to profitability) and saves it to the database with a timestamp.
 
 *   **FastAPI:** A modern, incredibly fast web framework for building APIs with Python. It is highly favored for data-heavy and AI applications because it seamlessly handles complex math and integrations (like Pandas or Vertex AI) while providing automatic documentation and high performance.
 *   **Node.js:** A runtime environment that allows you to execute JavaScript on a server (outside of a web browser).

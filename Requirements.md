@@ -34,6 +34,13 @@ The generated report must include the following sections and data points:
   - Financial resilience: Cash available, Number of years it can withstand an economic downturn.
 - **Market Sentiment:** Who is buying the stock (e.g., specific gurus or institutional trends).
 
+#### D. Growth Company Evaluation
+For companies with negative cash flows or no current profitability, evaluate:
+1. Is the cash burn funding structural deficits or aggressive growth/R&D?
+2. Are the gross margins high enough to support future profitability?
+3. Is there a clear, mathematically sound "path to profitability" in the next 3-5 years?
+4. Do they have enough cash on the balance sheet (runway) to survive until they turn cash-flow positive without needing highly dilutive funding?
+
 #### B. Core Growth Indicators (The "Big 4" Numbers) & Alternative Metrics
 The app must retrieve and calculate historical growth rates to display a table with **3-year, 5-year, and 10-year** averages for:
 - Revenue (Sales)

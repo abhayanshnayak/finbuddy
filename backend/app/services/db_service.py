@@ -37,6 +37,30 @@ class DBService:
         except Exception as e:
             print(f"Firestore save failed: {e}")
 
+    def update_company_field(self, ticker: str, field_name: str, field_data: dict):
+        if not self.db:
+            return
+            
+        try:
+            company_ref = self.db.collection('companies').document(ticker)
+            # Use dot notation to update a nested field
+            company_ref.update({
+                f"context.{field_name}": field_data,
+                "last_updated": datetime.now(pytz.utc).isoformat()
+            })
+        except Exception as e:
+            # If the document doesn't exist, this will fail. Let's fallback to set with merge.
+            print(f"Firestore update failed, falling back to set with merge: {e}")
+            try:
+                company_ref.set({
+                    "context": {
+                        field_name: field_data
+                    },
+                    "last_updated": datetime.now(pytz.utc).isoformat()
+                }, merge=True)
+            except Exception as inner_e:
+                print(f"Firestore set merge failed: {inner_e}")
+
     def list_companies(self) -> list:
         if not self.db:
             return []

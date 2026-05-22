@@ -106,3 +106,54 @@ class AIService:
                 continue
                 
         return {"error": f"AI Studio Generation Failed across all models. Last error: {last_error}"}
+
+    def analyze_growth_company(self, company_name: str, context_data: dict) -> dict:
+        """
+        Prompts Gemini to analyze a growth company based on specific questions regarding cash burn, margins, and path to profitability.
+        """
+        if not self.client:
+            return {"error": "AI Studio not initialized."}
+
+        prompt = f"""
+        You are an expert financial analyst and professional value investor specializing in growth companies.
+        Analyze the company: {company_name}.
+        Financial Context Data: {json.dumps(context_data)}
+
+        Please conduct an exceptionally thorough qualitative analysis of the company's growth metrics, runway, and path to profitability based on the provided financial context data.
+        
+        Provide the analysis in JSON format exactly matching this structure:
+        {{
+            "cash_burn_analysis": "Is the cash burn funding structural deficits (bad) or aggressive growth/R&D (good)? Provide a detailed explanation.",
+            "gross_margin_analysis": "Are the gross margins high enough to support future profitability? Explain the margin trajectory.",
+            "path_to_profitability": "Is there a clear, mathematically sound 'path to profitability' in the next 3-5 years? Analyze revenue growth vs operating expense growth.",
+            "runway_analysis": "Do they have enough cash on the balance sheet (runway) to survive until they turn cash-flow positive without needing highly dilutive funding? Calculate estimated runway based on latest cash and FCF/burn rate."
+        }}
+
+        Return ONLY the raw JSON object. Do not include markdown code blocks.
+        """
+        
+        models_to_try = [
+            "gemini-3.1-pro-preview",
+            "gemini-3.5-flash",
+            "gemini-3.1-flash-lite"
+        ]
+        
+        last_error = None
+        for model_name in models_to_try:
+            try:
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                text = response.text.strip()
+                if text.startswith("```json"):
+                    text = text[7:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                return json.loads(text)
+            except Exception as e:
+                print(f"AI Studio Generation Failed with {model_name}: {e}")
+                last_error = e
+                continue
+                
+        return {"error": f"AI Studio Generation Failed across all models. Last error: {last_error}"}

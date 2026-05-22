@@ -338,6 +338,63 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
 
     return compute_report_from_raw(raw_data, calc)
 
+@app.get("/api/stocks/{ticker}/growth-analysis")
+async def get_growth_analysis(ticker: str):
+    """
+    Fetches the growth company analysis from the database.
+    If not found, it gathers financial context, generates the analysis using Gemini,
+    caches the result in the database, and returns it.
+    """
+    try:
+        # Check DB first
+        company_data = db.get_company_data(ticker)
+        context = company_data.get("context", {})
+        growth_analysis = context.get("growth_company_analysis")
+        
+        if growth_analysis:
+            return growth_analysis
+            
+        # If not in DB, we need to generate it.
+        # But we need financial context. Let's see if we have financials.
+        financials = company_data.get("financials", {})
+        if not financials:
+            raise HTTPException(status_code=400, detail="No financial data available for this company to analyze.")
+            
+        # Build context
+        context_data = {
+            "name": company_data.get("name", ticker),
+            "ticker": ticker,
+            "revenue_history": financials.get("raw_data", {}).get("revenue", []),
+            "fcf_history": financials.get("raw_data", {}).get("ocf", []), # Assuming FCF is derived from OCF
+            "net_income_history": financials.get("raw_data", {}).get("netIncome", []),
+            "latest_cash": financials.get("latest_cash", 0),
+            "latest_total_debt": financials.get("latest_total_debt", 0),
+            "market_cap": financials.get("valuations", {}).get("market_cap", 0),
+            "derived_metrics": financials.get("derived_metrics", {})
+        }
+        
+        # Call AI
+        analysis_result = ai.analyze_growth_company(company_data.get("name", ticker), context_data)
+        
+        if "error" in analysis_result:
+             raise HTTPException(status_code=500, detail=analysis_result["error"])
+             
+        # Add timestamp
+        from datetime import datetime
+        import pytz
+        analysis_result["generated_at"] = datetime.now(pytz.utc).isoformat()
+        
+        # Save back to DB using our new update function
+        db.update_company_field(ticker, "growth_company_analysis", analysis_result)
+        
+        return analysis_result
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error in get_growth_analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/companies")
 def get_all_companies():
     companies = db.list_companies()

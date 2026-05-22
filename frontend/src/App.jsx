@@ -19,6 +19,10 @@ function App() {
   const [error, setError] = useState('');
   const [activeAuditTab, setActiveAuditTab] = useState('growth');
   const [singleForceFresh, setSingleForceFresh] = useState(false);
+  
+  // Growth Analysis State
+  const [growthAnalysis, setGrowthAnalysis] = useState(null);
+  const [loadingGrowthAnalysis, setLoadingGrowthAnalysis] = useState(false);
 
   // Bulk Ingestion State
   const [bulkInput, setBulkInput] = useState('');
@@ -59,6 +63,33 @@ function App() {
       setLoading(false);
     }
   };
+
+  // Fetch Growth Analysis when report changes
+  useEffect(() => {
+    if (report && ticker && activeTab === 'single') {
+      const fetchGrowthAnalysis = async () => {
+        setLoadingGrowthAnalysis(true);
+        try {
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const response = await fetch(`${apiBase}/api/stocks/${ticker}/growth-analysis`);
+          if (response.ok) {
+            const data = await response.json();
+            setGrowthAnalysis(data);
+          } else {
+             setGrowthAnalysis(null);
+          }
+        } catch (err) {
+          console.error("Error fetching growth analysis:", err);
+          setGrowthAnalysis(null);
+        } finally {
+          setLoadingGrowthAnalysis(false);
+        }
+      };
+      fetchGrowthAnalysis();
+    } else {
+      setGrowthAnalysis(null);
+    }
+  }, [report, ticker, activeTab]);
 
   // Directly load report from completed bulk list item
   const viewSingleTicker = async (targetTicker) => {
@@ -915,6 +946,63 @@ function App() {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Growth Company Analysis */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <h3 className="text-xl font-semibold text-gray-900">AI Growth Company Analysis</h3>
+                    {loadingGrowthAnalysis && (
+                      <span className="text-xs font-semibold text-blue-600 animate-pulse bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+                        Generating AI Insights...
+                      </span>
+                    )}
+                    {growthAnalysis?.generated_at && !loadingGrowthAnalysis && (
+                       <span className="text-[10px] text-gray-400">Generated: {new Date(growthAnalysis.generated_at).toLocaleDateString()}</span>
+                    )}
+                  </div>
+                  
+                  {loadingGrowthAnalysis ? (
+                    <div className="space-y-4 animate-pulse pt-2">
+                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                      <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                    </div>
+                  ) : growthAnalysis ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-1.5 p-4 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-xl">🔥</span>
+                          <span className="font-bold text-gray-800 text-sm">Cash Burn Strategy</span>
+                        </div>
+                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.cash_burn_analysis}</p>
+                      </div>
+                      <div className="space-y-1.5 p-4 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-xl">📈</span>
+                          <span className="font-bold text-gray-800 text-sm">Margin Trajectory</span>
+                        </div>
+                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.gross_margin_analysis}</p>
+                      </div>
+                      <div className="space-y-1.5 p-4 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-xl">🎯</span>
+                          <span className="font-bold text-gray-800 text-sm">Path to Profitability</span>
+                        </div>
+                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.path_to_profitability}</p>
+                      </div>
+                      <div className="space-y-1.5 p-4 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-xl">⏳</span>
+                          <span className="font-bold text-gray-800 text-sm">Runway Analysis</span>
+                        </div>
+                        <p className="text-sm text-gray-600 leading-relaxed">{growthAnalysis.runway_analysis}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic py-2">No growth analysis available.</p>
+                  )}
                 </div>
 
                 {/* Company Overview */}
