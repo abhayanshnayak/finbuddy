@@ -1,5 +1,6 @@
 import sys
-sys.path.append('/Applications/Antigravity Projects/Finbuddy/backend')
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.services.db_service import DBService
 
 db = DBService(project_id="gen-lang-client-0826635932")

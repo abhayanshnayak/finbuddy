@@ -9,7 +9,7 @@ from tenacity import retry, wait_exponential_jitter, stop_after_attempt
 
 from app.services.finnhub_client import FinnhubClient
 from app.services.calculator import FinancialCalculator
-from app.services.ai_service import AIService
+from app.services.analyst_service import AnalystService
 from app.services.db_service import DBService
 from app.main import settings, generate_and_cache_report
 
@@ -18,7 +18,7 @@ router = APIRouter()
 # Initialize Services
 finnhub = FinnhubClient(api_key=settings.FINNHUB_API_KEY)
 calc = FinancialCalculator()
-ai = AIService(project_id=settings.GCP_PROJECT_ID)
+ai = AnalystService(project_id=settings.GCP_PROJECT_ID)
 db = DBService(project_id=settings.GCP_PROJECT_ID)
 
 # Thread-safe rate limiter: 20 tokens per 60 seconds (margin of safety under Finnhub's 30/min limit)

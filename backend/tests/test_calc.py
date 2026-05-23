@@ -1,7 +1,12 @@
 import json
 from app.services.calculator import FinancialCalculator
 
-with open('metrics.json', 'r') as f:
+import os
+
+current_dir = os.path.dirname(__file__)
+metrics_path = os.path.join(current_dir, 'metrics.json')
+
+with open(metrics_path, 'r') as f:
     metrics = json.load(f)
 
 calc = FinancialCalculator()

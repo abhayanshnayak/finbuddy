@@ -11,7 +11,7 @@ import pytz
 
 from app.services.finnhub_client import FinnhubClient
 from app.services.calculator import FinancialCalculator
-from app.services.ai_service import AIService
+from app.services.analyst_service import AnalystService
 from app.services.db_service import DBService
 
 class Settings(BaseSettings):
@@ -33,7 +33,7 @@ app.add_middleware(
 # Initialize Services
 finnhub = FinnhubClient(api_key=settings.FINNHUB_API_KEY)
 calc = FinancialCalculator()
-ai = AIService(project_id=settings.GCP_PROJECT_ID)
+ai = AnalystService(project_id=settings.GCP_PROJECT_ID)
 db = DBService(project_id=settings.GCP_PROJECT_ID)
 
 # Initialize Pub/Sub Publisher client if possible
@@ -247,7 +247,7 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
         }
     }
 
-def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: FinancialCalculator, ai: AIService, db: DBService, force_fresh: bool = False, tags: List[str] = None):
+def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: FinancialCalculator, ai: AnalystService, db: DBService, force_fresh: bool = False, tags: List[str] = None):
     ticker = ticker.upper()
     original_ticker = ticker
     tags = tags or []

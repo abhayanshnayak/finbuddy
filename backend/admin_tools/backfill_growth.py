@@ -1,14 +1,15 @@
 import sys
+import os
 import time
 from datetime import datetime
 import pytz
 
-sys.path.append('/Applications/Antigravity Projects/Finbuddy/backend')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.services.db_service import DBService
-from app.services.ai_service import AIService
+from app.services.analyst_service import AnalystService
 
 db = DBService(project_id="gen-lang-client-0826635932")
-ai = AIService(project_id="gen-lang-client-0826635932")
+ai = AnalystService(project_id="gen-lang-client-0826635932")
 
 docs = list(db.db.collection('companies').stream())
 

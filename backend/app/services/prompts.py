@@ -1,28 +1,8 @@
-import json
-from google import genai
-
-class AIService:
-    def __init__(self, project_id: str = None, location: str = "us-central1"):
-        self.project_id = project_id
-        self.location = location
-        try:
-            self.client = genai.Client(api_key="AIzaSyB43_2R4-9Ros7VI9zbvVngXMgP75zP4UY")
-        except Exception as e:
-            print(f"Warning: Failed to initialize AI Studio: {e}")
-            self.client = None
-
-    def analyze_qualitative(self, company_name: str, profile: dict, metrics: dict) -> dict:
-        """
-        Prompts Gemini to generate the qualitative JSON structures defined in the technical design.
-        """
-        if not self.client:
-            return {"error": "AI Studio not initialized."}
-
-        prompt = f"""
+QUALITATIVE_ANALYSIS_PROMPT = """
         You are an expert financial analyst and professional value investor.
         Analyze the company: {company_name}.
-        Profile Data: {json.dumps(profile)}
-        Metrics Data: {json.dumps(metrics)}
+        Profile Data: {profile}
+        Metrics Data: {metrics}
 
         Please conduct an exceptionally thorough, deep-dive qualitative analysis of the company, focusing specifically on their growth strategy, competitive moats, and operational/strategic challenges, integrating highly specific insights from their recent 10-K filings. Avoid generic high-level summaries; provide rich, professional-grade equity research paragraphs.
         
@@ -79,45 +59,12 @@ class AIService:
         }}
 
         Return ONLY the raw JSON object. Do not include markdown code blocks.
-        """
-        
-        models_to_try = [
-            "gemini-3.5-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-2.5-flash"
-        ]
-        
-        last_error = None
-        for model_name in models_to_try:
-            try:
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                text = response.text.strip()
-                if text.startswith("```json"):
-                    text = text[7:]
-                if text.endswith("```"):
-                    text = text[:-3]
-                return json.loads(text)
-            except Exception as e:
-                print(f"AI Studio Generation Failed with {model_name}: {e}")
-                last_error = e
-                continue
-                
-        return {"error": f"AI Studio Generation Failed across all models. Last error: {last_error}"}
+"""
 
-    def analyze_growth_company(self, company_name: str, context_data: dict) -> dict:
-        """
-        Prompts Gemini to analyze a growth company based on specific questions regarding cash burn, margins, and path to profitability.
-        """
-        if not self.client:
-            return {"error": "AI Studio not initialized."}
-
-        prompt = f"""
+GROWTH_COMPANY_PROMPT = """
         You are an exceptionally strict, highly critical financial analyst and professional value investor specializing in growth companies.
         Analyze the company: {company_name}.
-        Financial Context Data: {json.dumps(context_data)}
+        Financial Context Data: {context_data}
 
         Please conduct an exceptionally thorough, skeptical, and quantitative qualitative analysis of the company's growth metrics, runway, and path to profitability based on the provided financial context data. Do NOT be lenient. If the numbers do not clearly support a healthy trajectory, you must fail them.
         
@@ -144,30 +91,4 @@ class AIService:
         }}
 
         Return ONLY the raw JSON object. Do not include markdown code blocks.
-        """
-        
-        models_to_try = [
-            "gemini-3.5-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-2.5-flash"
-        ]
-        
-        last_error = None
-        for model_name in models_to_try:
-            try:
-                response = self.client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                text = response.text.strip()
-                if text.startswith("```json"):
-                    text = text[7:]
-                if text.endswith("```"):
-                    text = text[:-3]
-                return json.loads(text)
-            except Exception as e:
-                print(f"AI Studio Generation Failed with {model_name}: {e}")
-                last_error = e
-                continue
-                
-        return {"error": f"AI Studio Generation Failed across all models. Last error: {last_error}"}
+"""
