@@ -1,10 +1,14 @@
+import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../backend/.env'))
+
 import time
 import base64
 import requests
 from google.cloud import pubsub_v1
 
 def run_bridge():
-    project_id = "gen-lang-client-0826635932"
+    project_id = os.environ.get('GCP_PROJECT_ID')
     subscription_id = "stock-ingestion-test-sub"
     worker_url = "http://localhost:8080/process_and_store_ticker_data"
     

@@ -7,19 +7,11 @@ from fastapi import APIRouter, Request, Response, status
 from aiolimiter import AsyncLimiter
 from tenacity import retry, wait_exponential_jitter, stop_after_attempt
 
-from app.services.finnhub_client import FinnhubClient
-from app.services.calculator import FinancialCalculator
-from app.services.analyst_service import AnalystService
-from app.services.db_service import DBService
-from app.main import settings, generate_and_cache_report
+from app.core.config import settings
+from app.services.report_service import generate_and_cache_report
+from app.dependencies import finnhub_client as finnhub, calc_service as calc, ai_service as ai, db_service as db
 
 router = APIRouter()
-
-# Initialize Services
-finnhub = FinnhubClient(api_key=settings.FINNHUB_API_KEY)
-calc = FinancialCalculator()
-ai = AnalystService(project_id=settings.GCP_PROJECT_ID)
-db = DBService(project_id=settings.GCP_PROJECT_ID)
 
 # Thread-safe rate limiter: 20 tokens per 60 seconds (margin of safety under Finnhub's 30/min limit)
 limiter = AsyncLimiter(max_rate=20, time_period=60)

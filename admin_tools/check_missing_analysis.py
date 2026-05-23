@@ -2,8 +2,9 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend'))
 from app.services.db_service import DBService
+from app.core.config import settings
 
-db = DBService(project_id="gen-lang-client-0826635932")
+db = DBService(project_id=settings.GCP_PROJECT_ID)
 
 docs = db.db.collection('companies').stream()
 missing = []

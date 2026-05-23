@@ -3,7 +3,7 @@ import mimetypes
 from google.cloud import storage
 
 def deploy_frontend():
-    project_id = "gen-lang-client-0826635932"
+    project_id = os.environ.get('GCP_PROJECT_ID')
     bucket_name = f"finbuddy-frontend-{project_id}"
     region = "us-central1"
     

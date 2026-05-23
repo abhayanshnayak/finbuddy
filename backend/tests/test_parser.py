@@ -1,3 +1,7 @@
+import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../.env'))
+
 import requests
 
 API_KEY = "d6ch2qhr01qsiik27i80d6ch2qhr01qsiik27i8g"

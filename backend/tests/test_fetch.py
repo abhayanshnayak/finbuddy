@@ -1,7 +1,11 @@
+import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../.env'))
+
 import urllib.request
 import json
 
-url = "https://finnhub.io/api/v1/stock/financials-reported?symbol=GOOGL&freq=annual&token=d6ch2qhr01qsiik27i80d6ch2qhr01qsiik27i8g"
+url = f"https://finnhub.io/api/v1/stock/financials-reported?symbol=GOOGL&freq=annual&token={os.environ.get("FINNHUB_API_KEY")}"
 req = urllib.request.Request(url)
 try:
     with urllib.request.urlopen(req) as response:

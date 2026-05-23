@@ -6,7 +6,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 
 from google.cloud import firestore
 from app.services.db_service import DBService
-from app.main import settings
+from app.core.config import settings
 
 def clear_all_cache():
     print(f"Connecting to Firestore for project: {settings.GCP_PROJECT_ID}...")
