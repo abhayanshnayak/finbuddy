@@ -29,5 +29,8 @@ jobs:
         pip install -r requirements-dev.txt
 
     - name: Run Pytest
+      env:
+        FINNHUB_API_KEY: "test_dummy_key"
+        GCP_PROJECT_ID: "test_dummy_project"
       run: |
         pytest tests/ --cov=app --cov-report=xml --cov-report=term
