@@ -8,6 +8,34 @@ from app.services.calculator import FinancialCalculator
 from app.services.analyst_service import AnalystService
 from app.services.db_service import DBService
 
+def build_growth_analysis_context(ticker: str, name: str, financials: dict, metrics: dict, profile: dict, current_price: float) -> dict:
+    history = financials.get("history", {})
+    ocf_list = history.get("operating_cash_flow", [])
+    capex_list = history.get("capex", [])
+    fcf_history = []
+    for i in range(len(ocf_list)):
+        year = ocf_list[i]["year"]
+        ocf_val = ocf_list[i]["value"]
+        capex_val = capex_list[i]["value"] if i < len(capex_list) else 0.0
+        fcf_history.append({"year": year, "value": ocf_val - abs(capex_val)})
+        
+    shares_out = profile.get("shareOutstanding", 0) * 1000000
+    market_cap = current_price * shares_out if shares_out else metrics.get("metric", {}).get("marketCapitalization", 0) * 1000000
+
+    return {
+        "name": name,
+        "ticker": ticker,
+        "revenue_history": history.get("revenue", []),
+        "operating_cash_flow_history": ocf_list,
+        "free_cash_flow_history": fcf_history,
+        "net_income_history": history.get("net_income", []),
+        "eps_history": history.get("eps", []),
+        "latest_cash": financials.get("latest_cash", 0),
+        "latest_total_debt": financials.get("latest_total_debt", 0),
+        "market_cap": market_cap
+    }
+
+
 def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     ticker = raw_data.get("ticker", "Unknown")
     combined_tags = raw_data.get("tags", [])
@@ -269,6 +297,29 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
             raise Exception(f"AI generation failed: {ai_analysis['error']}")
 
     current_price = finnhub.get_quote(ticker).get("c", 0.0)
+    
+    # 3.5 Generate Growth Analysis
+    try:
+        context_data = build_growth_analysis_context(
+            ticker=ticker,
+            name=profile.get("name", ticker),
+            financials=financials,
+            metrics=metrics,
+            profile=profile,
+            current_price=current_price
+        )
+        
+        growth_analysis = ai.analyze_growth_company(profile.get("name", ticker), context_data)
+        if "error" not in growth_analysis:
+            growth_analysis["generated_at"] = datetime.now(pytz.utc).isoformat()
+        else:
+            if existing_data and "context" in existing_data and "growth_company_analysis" in existing_data["context"]:
+                 growth_analysis = existing_data["context"]["growth_company_analysis"]
+            else:
+                 growth_analysis = {}
+    except Exception as e:
+        print(f"Failed to generate growth analysis for {ticker}: {e}")
+        growth_analysis = existing_data.get("context", {}).get("growth_company_analysis", {}) if existing_data else {}
 
     # Generate timestamp in PST
     pst_tz = pytz.timezone('US/Pacific')
@@ -286,7 +337,10 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         "profile": profile,
         "metrics": metrics,
         "financials": financials,
-        "ai_analysis": ai_analysis
+        "ai_analysis": ai_analysis,
+        "context": {
+            "growth_company_analysis": growth_analysis
+        }
     }
 
     # 5. Save Raw to Cache

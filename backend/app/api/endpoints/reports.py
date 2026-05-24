@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 
 from app.dependencies import db_service as db, finnhub_client as finnhub, calc_service as calc, ai_service as ai
-from app.services.report_service import compute_report_from_raw, generate_and_cache_report
+from app.services.report_service import compute_report_from_raw, generate_and_cache_report, build_growth_analysis_context
 
 router = APIRouter()
 
@@ -29,36 +29,14 @@ async def get_growth_analysis(ticker: str, force_fresh: bool = False):
             raise HTTPException(status_code=400, detail="No financial data available for this company to analyze.")
             
         # Build context from raw DB object
-        history = financials.get("history", {})
-        metrics = company_data.get("metrics", {})
-        
-        # Calculate historical FCF
-        fcf_history = []
-        ocf_list = history.get("operating_cash_flow", [])
-        capex_list = history.get("capex", [])
-        for i in range(len(ocf_list)):
-            year = ocf_list[i]["year"]
-            ocf_val = ocf_list[i]["value"]
-            capex_val = capex_list[i]["value"] if i < len(capex_list) else 0.0
-            fcf_history.append({"year": year, "value": ocf_val - abs(capex_val)})
-
-        current_price = company_data.get("price_at_storage", 0.0)
-        profile = company_data.get("profile", {})
-        shares_out = profile.get("shareOutstanding", 0) * 1000000
-        market_cap = current_price * shares_out if shares_out else metrics.get("metric", {}).get("marketCapitalization", 0) * 1000000
-
-        context_data = {
-            "name": company_data.get("name", ticker),
-            "ticker": ticker,
-            "revenue_history": history.get("revenue", []),
-            "operating_cash_flow_history": ocf_list,
-            "free_cash_flow_history": fcf_history,
-            "net_income_history": history.get("net_income", []),
-            "eps_history": history.get("eps", []),
-            "latest_cash": financials.get("latest_cash", 0),
-            "latest_total_debt": financials.get("latest_total_debt", 0),
-            "market_cap": market_cap
-        }
+        context_data = build_growth_analysis_context(
+            ticker=ticker,
+            name=company_data.get("name", ticker),
+            financials=financials,
+            metrics=company_data.get("metrics", {}),
+            profile=company_data.get("profile", {}),
+            current_price=company_data.get("price_at_storage", 0.0)
+        )
         
         # Call AI
         analysis_result = ai.analyze_growth_company(company_data.get("name", ticker), context_data)
