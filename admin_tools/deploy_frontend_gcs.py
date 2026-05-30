@@ -61,6 +61,8 @@ def deploy_frontend():
                 content_type = "application/javascript"
                 
             print(f"Uploading {relative_path} ({content_type or 'unknown'})...")
+            if relative_path == "index.html":
+                blob.cache_control = "no-cache, no-store, must-revalidate"
             blob.upload_from_filename(local_path, content_type=content_type)
             
     print("\nDeployment complete!")

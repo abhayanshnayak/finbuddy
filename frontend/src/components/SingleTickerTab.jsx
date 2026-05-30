@@ -14,7 +14,7 @@ export default function SingleTickerTab({ initialTicker }) {
   const fetchReport = async (e, overrideTicker) => {
     const targetTicker = overrideTicker || ticker;
     if (e) e.preventDefault();
-    if (!ticker) return;
+    if (!targetTicker) return;
     
     setLoading(true);
     setError('');
