@@ -71,7 +71,20 @@ export default function SingleTickerTab({ initialTicker }) {
     }
   }, [initialTicker]);
 
-  const windageDetails = report?.financials?.valuations?.computation_windage_growth_details;
+  const windageDetails = report?.financials?.valuations?.computation_windage_details;
+
+  // Prepare combined last 10 years of OCF and Net Income data
+  const ocfHistory = report?.financials?.raw_data?.operating_cash_flow_history || [];
+  const niHistory = report?.financials?.raw_data?.net_income_history || [];
+  const last10Ocf = ocfHistory.slice(-10);
+  const combinedHistory = last10Ocf.map(ocfItem => {
+    const niItem = niHistory.find(ni => ni.year === ocfItem.year);
+    return {
+      year: ocfItem.year,
+      ocfValue: ocfItem.value,
+      niValue: niItem ? niItem.value : null
+    };
+  });
 
   return (
           <div className="space-y-8 animate-in fade-in duration-300">
@@ -410,7 +423,79 @@ export default function SingleTickerTab({ initialTicker }) {
                   {/* Tab Contents */}
                   {activeAuditTab === 'growth' && (
                     <div className="space-y-4 animate-in fade-in duration-200">
-                      {windageDetails?.is_cagr ? (
+                      {report.financials.valuations.windage_fallback_message ? (
+                        <>
+                          <div className="bg-amber-50/60 border border-amber-200 p-5 rounded-2xl space-y-3">
+                            <div className="flex items-center space-x-2 text-amber-800">
+                              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                              <h4 className="font-bold text-sm">Operating Cash Flow CAGR Fallback Triggered</h4>
+                            </div>
+                            <p className="text-xs text-amber-700 leading-relaxed">
+                              {report.financials.derived_metrics?.computation_windage || "OCF CAGR was negative or mathematically undefined, so the system fell back to the 10-year Net Income growth rate."}
+                            </p>
+                            <div className="p-4 bg-white border border-amber-100 rounded-xl flex justify-between items-center max-w-sm">
+                              <span className="text-xs font-semibold text-gray-500">10-Year Net Income CAGR (Fallback)</span>
+                              <span className="text-lg font-bold text-amber-600 font-mono">{(report.financials.valuations.windage_growth_rate_used * 100).toFixed(2)}%</span>
+                            </div>
+                          </div>
+
+                          {/* Historical OCF and Net Income side-by-side Table for Fallback */}
+                          <div className="mt-4 space-y-2">
+                            <h4 className="text-xs font-bold text-gray-700">Historical Metrics (Last 10 Years)</h4>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs text-left border border-gray-100 rounded-lg">
+                                <thead className="bg-gray-50 text-gray-600 uppercase tracking-wider text-[10px]">
+                                  <tr>
+                                    <th className="p-3">Year</th>
+                                    <th className="p-3 text-right">Operating Cash Flow</th>
+                                    <th className="p-3 text-right">Net Income</th>
+                                    <th className="p-3 text-center">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {combinedHistory.map((item, idx) => {
+                                    const niHistorySlice = niHistory.slice(-10);
+                                    const isStart = niHistorySlice.length > 0 && item.year === niHistorySlice[0].year;
+                                    const isEnd = niHistorySlice.length > 0 && item.year === niHistorySlice[niHistorySlice.length - 1].year;
+                                    return (
+                                      <tr key={idx} className={`hover:bg-slate-50/55 ${isStart || isEnd ? 'bg-amber-50/20 font-semibold text-amber-900' : 'text-gray-600'}`}>
+                                        <td className="p-3">
+                                          {item.year}
+                                          {isStart && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-100 text-amber-800">NI Start</span>}
+                                          {isEnd && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-200 text-amber-900">NI End</span>}
+                                        </td>
+                                        <td className="p-3 text-right font-mono text-gray-400">
+                                          {item.ocfValue < 0 ? '-' : ''}${formatLargeNumber(Math.abs(item.ocfValue))}
+                                        </td>
+                                        <td className="p-3 text-right font-mono font-semibold text-amber-700">
+                                          {item.niValue !== null ? (
+                                            <>{item.niValue < 0 ? '-' : ''}${formatLargeNumber(Math.abs(item.niValue))}</>
+                                          ) : (
+                                            '-'
+                                          )}
+                                        </td>
+                                        <td className="p-3 text-center">
+                                          {isStart || isEnd ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                              Used for NI CAGR
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-400">
+                                              Reference
+                                            </span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </>
+                      ) : windageDetails?.is_cagr ? (
                         <>
                           <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 text-sm text-blue-800">
                             <p className="font-semibold mb-1">How is Windage Growth Rate Calculated?</p>
@@ -450,18 +535,19 @@ export default function SingleTickerTab({ initialTicker }) {
 
                           {/* Historical Table */}
                           <div className="mt-4 space-y-2">
-                            <h4 className="text-xs font-bold text-gray-700">Historical Operating Cash Flow (Last 10 Years)</h4>
+                            <h4 className="text-xs font-bold text-gray-700">Historical Metrics (Last 10 Years)</h4>
                             <div className="overflow-x-auto">
                               <table className="w-full text-xs text-left border border-gray-100 rounded-lg">
                                 <thead className="bg-gray-50 text-gray-600 uppercase tracking-wider text-[10px]">
                                   <tr>
                                     <th className="p-3">Year</th>
                                     <th className="p-3 text-right">Operating Cash Flow</th>
+                                    <th className="p-3 text-right">Net Income</th>
                                     <th className="p-3 text-center">Status</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                  {windageDetails?.history?.map((item, idx) => {
+                                  {combinedHistory.map((item, idx) => {
                                     const isStart = item.year === windageDetails?.start_year;
                                     const isEnd = item.year === windageDetails?.end_year;
                                     return (
@@ -471,8 +557,15 @@ export default function SingleTickerTab({ initialTicker }) {
                                           {isStart && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-100 text-blue-800">Start Year</span>}
                                           {isEnd && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-100 text-indigo-800">End Year</span>}
                                         </td>
-                                        <td className="p-3 text-right font-mono">
-                                          {item.value < 0 ? '-' : ''}${formatLargeNumber(Math.abs(item.value))}
+                                        <td className="p-3 text-right font-mono font-semibold text-blue-700">
+                                          {item.ocfValue < 0 ? '-' : ''}${formatLargeNumber(Math.abs(item.ocfValue))}
+                                        </td>
+                                        <td className="p-3 text-right font-mono text-gray-500">
+                                          {item.niValue !== null ? (
+                                            <>{item.niValue < 0 ? '-' : ''}${formatLargeNumber(Math.abs(item.niValue))}</>
+                                          ) : (
+                                            '-'
+                                          )}
                                         </td>
                                         <td className="p-3 text-center">
                                           {isStart || isEnd ? (
@@ -498,7 +591,7 @@ export default function SingleTickerTab({ initialTicker }) {
                           <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 text-sm text-blue-800">
                             <p className="font-semibold mb-1">How is Windage Growth Rate Calculated?</p>
                             <p className="text-xs text-blue-700 leading-relaxed">
-                              1. We compute year-over-year (YoY) Operating Cash Flow (OCF) growth rates for up to the last 15 years.<br />
+                              1. We compute year-over-year (YoY) Operating Cash Flow (OCF) growth rates for up to the last 10 years.<br />
                               2. We calculate the mean and standard deviation of all YoY rates.<br />
                               3. To ensure stable growth projections, we filter out outliers (rates outside <strong>1 standard deviation</strong> from the mean).<br />
                               4. The final Windage Growth Rate is the average of the remaining (non-outlier) rates: <strong className="text-blue-900">{(windageDetails?.final_rate * 100).toFixed(2)}%</strong>.

@@ -56,11 +56,11 @@ class FinnhubClient:
             
             rev = get_val(report, "ic", ["us-gaap_Revenues", "us-gaap_SalesRevenueNet", "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax"])
             ni = get_val(report, "ic", ["us-gaap_NetIncomeLoss"])
-            ocf = get_val(report, "cf", ["us-gaap_NetCashProvidedByUsedInOperatingActivities"])
+            ocf = get_val(report, "cf", ["us-gaap_NetCashProvidedByUsedInOperatingActivities", "us-gaap_NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"])
             equity = get_val(report, "bs", ["us-gaap_StockholdersEquity", "us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"])
             eps = get_val(report, "ic", ["us-gaap_EarningsPerShareDiluted", "us-gaap_EarningsPerShareBasic"])
-            capex = get_val(report, "cf", ["us-gaap_PaymentsForPropertyPlantAndEquipment", "us-gaap_PaymentsToAcquirePropertyPlantAndEquipment"])
-            da = get_val(report, "cf", ["us-gaap_DepreciationDepletionAndAmortization"])
+            capex = get_val(report, "cf", ["us-gaap_PaymentsForPropertyPlantAndEquipment", "us-gaap_PaymentsToAcquirePropertyPlantAndEquipment", "us-gaap_PaymentsForPropertyPlantAndEquipmentContinuingOperations", "us-gaap_PaymentsToAcquirePropertyPlantAndEquipmentContinuingOperations"])
+            da = get_val(report, "cf", ["us-gaap_DepreciationDepletionAndAmortization", "us-gaap_DepreciationDepletionAndAmortizationContinuingOperations", "us-gaap_DepreciationAndAmortization"])
             
             history["revenue"].append({"year": year, "value": rev})
             history["net_income"].append({"year": year, "value": ni})
