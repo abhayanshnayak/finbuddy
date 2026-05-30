@@ -37,12 +37,12 @@ export default function SingleTickerTab({ initialTicker }) {
 
   // Fetch Growth Analysis when report changes
   useEffect(() => {
-    if (report && ticker) {
+    if (report && report.ticker) {
       const fetchGrowthAnalysis = async () => {
         setLoadingGrowthAnalysis(true);
         try {
           const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-          const response = await fetch(`${apiBase}/api/stocks/${targetTicker}/growth-analysis?force_fresh=${singleForceFresh}`);
+          const response = await fetch(`${apiBase}/api/stocks/${report.ticker}/growth-analysis?force_fresh=${singleForceFresh}`);
           if (response.ok) {
             const data = await response.json();
             setGrowthAnalysis(data);
@@ -60,7 +60,7 @@ export default function SingleTickerTab({ initialTicker }) {
     } else {
       setGrowthAnalysis(null);
     }
-  }, [report, ticker]);
+  }, [report, singleForceFresh]);
 
 
 
@@ -404,80 +404,157 @@ export default function SingleTickerTab({ initialTicker }) {
                       >
                         Windage PE
                       </button>
-                      <button
-                        onClick={() => setActiveAuditTab('stats')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                          activeAuditTab === 'stats'
-                            ? 'bg-white text-blue-700 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        Statistical Bounds
-                      </button>
                     </div>
                   </div>
 
                   {/* Tab Contents */}
                   {activeAuditTab === 'growth' && (
                     <div className="space-y-4 animate-in fade-in duration-200">
-                      <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 text-sm text-blue-800">
-                        <p className="font-semibold mb-1">How is Windage Growth Rate Calculated?</p>
-                        <p className="text-xs text-blue-700 leading-relaxed">
-                          1. We compute year-over-year (YoY) Operating Cash Flow (OCF) growth rates for up to the last 15 years.<br />
-                          2. We calculate the mean and standard deviation of all YoY rates.<br />
-                          3. To ensure stable growth projections, we filter out outliers (rates outside <strong>1 standard deviation</strong> from the mean).<br />
-                          4. The final Windage Growth Rate is the average of the remaining (non-outlier) rates: <strong className="text-blue-900">{(windageDetails?.final_rate * 100).toFixed(2)}%</strong>.
-                        </p>
-                      </div>
+                      {windageDetails?.is_cagr ? (
+                        <>
+                          <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 text-sm text-blue-800">
+                            <p className="font-semibold mb-1">How is Windage Growth Rate Calculated?</p>
+                            <p className="text-xs text-blue-700 leading-relaxed">
+                              We calculate the <strong>Compound Annual Growth Rate (CAGR)</strong> of Operating Cash Flow (OCF) over the last 10 years.<br />
+                              Formula: <code className="bg-blue-100 px-1.5 py-0.5 rounded font-bold text-blue-900 font-mono text-[11px]">CAGR = (Ending OCF / Starting OCF) ^ (1 / Years) - 1</code>
+                            </p>
+                          </div>
 
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs text-left border border-gray-100 rounded-lg">
-                          <thead className="bg-gray-50 text-gray-600 uppercase tracking-wider text-[10px]">
-                            <tr>
-                              <th className="p-3">Period</th>
-                              <th className="p-3 text-right">Start OCF</th>
-                              <th className="p-3 text-right">End OCF</th>
-                              <th className="p-3 text-right">Calculated YoY</th>
-                              <th className="p-3 text-center">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {windageDetails?.steps?.map((step, idx) => (
-                              <tr key={idx} className={`hover:bg-slate-50/55 ${!step.is_included ? 'bg-amber-50/20 text-gray-400' : 'text-gray-700'}`}>
-                                <td className="p-3 font-medium">{step.from_year} → {step.to_year}</td>
-                                <td className="p-3 text-right font-mono">
-                                  {step.prev_value < 0 
-                                    ? `-$${formatLargeNumber(Math.abs(step.prev_value))}` 
-                                    : step.prev_value >= 1000 
-                                      ? `$${formatLargeNumber(step.prev_value)}` 
-                                      : `$${step.prev_value.toFixed(2)}`}
-                                </td>
-                                <td className="p-3 text-right font-mono">
-                                  {step.curr_value < 0 
-                                    ? `-$${formatLargeNumber(Math.abs(step.curr_value))}` 
-                                    : step.curr_value >= 1000 
-                                      ? `$${formatLargeNumber(step.curr_value)}` 
-                                      : `$${step.curr_value.toFixed(2)}`}
-                                </td>
-                                <td className="p-3 text-right font-mono font-semibold">
-                                  {(step.rate * 100).toFixed(2)}%
-                                </td>
-                                <td className="p-3 text-center">
-                                  {step.is_included ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-800">
-                                      Included
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800" title="Filtered out because rate is outside 1 standard deviation">
-                                      Outlier (Filtered)
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                          {/* CAGR Stats Cards */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="p-4 bg-white border border-gray-150 rounded-xl text-center shadow-sm">
+                              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Starting OCF ({windageDetails?.start_year})</p>
+                              <p className="text-lg font-extrabold text-gray-800 mt-1 font-mono">
+                                {windageDetails?.start_value < 0 ? '-' : ''}${formatLargeNumber(Math.abs(windageDetails?.start_value || 0))}
+                              </p>
+                            </div>
+                            <div className="p-4 bg-white border border-gray-150 rounded-xl text-center shadow-sm">
+                              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Ending OCF ({windageDetails?.end_year})</p>
+                              <p className="text-lg font-extrabold text-gray-800 mt-1 font-mono">
+                                {windageDetails?.end_value < 0 ? '-' : ''}${formatLargeNumber(Math.abs(windageDetails?.end_value || 0))}
+                              </p>
+                            </div>
+                            <div className="p-4 bg-white border border-gray-150 rounded-xl text-center shadow-sm">
+                              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Duration</p>
+                              <p className="text-lg font-extrabold text-gray-800 mt-1 font-mono">
+                                {windageDetails?.years} Years
+                              </p>
+                            </div>
+                            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-150 rounded-xl text-center shadow-sm">
+                              <p className="text-[10px] text-blue-800 uppercase tracking-wider font-bold">Calculated CAGR</p>
+                              <p className="text-lg font-extrabold text-blue-700 mt-1 font-mono">
+                                {(windageDetails?.cagr * 100).toFixed(2)}%
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Historical Table */}
+                          <div className="mt-4 space-y-2">
+                            <h4 className="text-xs font-bold text-gray-700">Historical Operating Cash Flow (Last 10 Years)</h4>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs text-left border border-gray-100 rounded-lg">
+                                <thead className="bg-gray-50 text-gray-600 uppercase tracking-wider text-[10px]">
+                                  <tr>
+                                    <th className="p-3">Year</th>
+                                    <th className="p-3 text-right">Operating Cash Flow</th>
+                                    <th className="p-3 text-center">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {windageDetails?.history?.map((item, idx) => {
+                                    const isStart = item.year === windageDetails?.start_year;
+                                    const isEnd = item.year === windageDetails?.end_year;
+                                    return (
+                                      <tr key={idx} className={`hover:bg-slate-50/55 ${isStart || isEnd ? 'bg-blue-50/20 font-semibold text-blue-900' : 'text-gray-600'}`}>
+                                        <td className="p-3">
+                                          {item.year}
+                                          {isStart && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-100 text-blue-800">Start Year</span>}
+                                          {isEnd && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-100 text-indigo-800">End Year</span>}
+                                        </td>
+                                        <td className="p-3 text-right font-mono">
+                                          {item.value < 0 ? '-' : ''}${formatLargeNumber(Math.abs(item.value))}
+                                        </td>
+                                        <td className="p-3 text-center">
+                                          {isStart || isEnd ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-150 text-green-800">
+                                              Used for CAGR
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-400">
+                                              Reference
+                                            </span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 text-sm text-blue-800">
+                            <p className="font-semibold mb-1">How is Windage Growth Rate Calculated?</p>
+                            <p className="text-xs text-blue-700 leading-relaxed">
+                              1. We compute year-over-year (YoY) Operating Cash Flow (OCF) growth rates for up to the last 15 years.<br />
+                              2. We calculate the mean and standard deviation of all YoY rates.<br />
+                              3. To ensure stable growth projections, we filter out outliers (rates outside <strong>1 standard deviation</strong> from the mean).<br />
+                              4. The final Windage Growth Rate is the average of the remaining (non-outlier) rates: <strong className="text-blue-900">{(windageDetails?.final_rate * 100).toFixed(2)}%</strong>.
+                            </p>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left border border-gray-100 rounded-lg">
+                              <thead className="bg-gray-50 text-gray-600 uppercase tracking-wider text-[10px]">
+                                <tr>
+                                  <th className="p-3">Period</th>
+                                  <th className="p-3 text-right">Start OCF</th>
+                                  <th className="p-3 text-right">End OCF</th>
+                                  <th className="p-3 text-right">Calculated YoY</th>
+                                  <th className="p-3 text-center">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {windageDetails?.steps?.map((step, idx) => (
+                                  <tr key={idx} className={`hover:bg-slate-50/55 ${!step.is_included ? 'bg-amber-50/20 text-gray-400' : 'text-gray-700'}`}>
+                                    <td className="p-3 font-medium">{step.from_year} → {step.to_year}</td>
+                                    <td className="p-3 text-right font-mono">
+                                      {step.prev_value < 0 
+                                        ? `-$${formatLargeNumber(Math.abs(step.prev_value))}` 
+                                        : step.prev_value >= 1000 
+                                          ? `$${formatLargeNumber(step.prev_value)}` 
+                                          : `$${step.prev_value.toFixed(2)}`}
+                                    </td>
+                                    <td className="p-3 text-right font-mono">
+                                      {step.curr_value < 0 
+                                        ? `-$${formatLargeNumber(Math.abs(step.curr_value))}` 
+                                        : step.curr_value >= 1000 
+                                          ? `$${formatLargeNumber(step.curr_value)}` 
+                                          : `$${step.curr_value.toFixed(2)}`}
+                                    </td>
+                                    <td className="p-3 text-right font-mono font-semibold">
+                                      {(step.rate * 100).toFixed(2)}%
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      {step.is_included ? (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-800">
+                                          Included
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800" title="Filtered out because rate is outside 1 standard deviation">
+                                          Outlier (Filtered)
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -536,41 +613,6 @@ export default function SingleTickerTab({ initialTicker }) {
                     </div>
                   )}
 
-                  {activeAuditTab === 'stats' && (
-                    <div className="space-y-4 animate-in fade-in duration-200">
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100/80 text-xs text-gray-600 leading-relaxed">
-                        <p className="font-semibold text-gray-800 mb-1">Standard Deviation Filtering Log</p>
-                        We filter out extreme YoY Operating Cash Flow (OCF) growth spikes or drop-offs that do not reflect sustainable operations. By bounding growth rates within 1 standard deviation, we align projections with stable operations.
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="p-4 bg-white border border-gray-200 rounded-xl text-center shadow-sm">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Mean YoY Growth</p>
-                          <p className="text-lg font-bold text-gray-800 mt-1 font-mono">
-                            {(windageDetails?.stats?.mean * 100).toFixed(2)}%
-                          </p>
-                        </div>
-                        <div className="p-4 bg-white border border-gray-200 rounded-xl text-center shadow-sm">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Standard Deviation</p>
-                          <p className="text-lg font-bold text-gray-800 mt-1 font-mono">
-                            {(windageDetails?.stats?.stdev * 100).toFixed(2)}%
-                          </p>
-                        </div>
-                        <div className="p-4 bg-white border border-gray-200 rounded-xl text-center shadow-sm">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Lower Bound (-1 SD)</p>
-                          <p className="text-lg font-bold text-red-600 mt-1 font-mono">
-                            {(windageDetails?.stats?.lower_bound * 100).toFixed(2)}%
-                          </p>
-                        </div>
-                        <div className="p-4 bg-white border border-gray-200 rounded-xl text-center shadow-sm">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Upper Bound (+1 SD)</p>
-                          <p className="text-lg font-bold text-green-600 mt-1 font-mono">
-                            {(windageDetails?.stats?.upper_bound * 100).toFixed(2)}%
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Strategic Insights */}

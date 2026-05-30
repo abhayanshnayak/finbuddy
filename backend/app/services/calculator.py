@@ -52,101 +52,69 @@ class FinancialCalculator:
         return rates
 
     def calculate_windage_growth_rate(self, ocf_history: List[Dict[str, Any]]) -> tuple[float, str, Dict[str, Any]]:
-        """Average of 10-year OCF growth rates within 1 std dev."""
+        """Calculates the 10-year Compound Annual Growth Rate (CAGR) of Operating Cash Flow."""
         if len(ocf_history) < 2:
             empty_details = {
+                "start_year": None,
+                "start_value": 0.0,
+                "end_year": None,
+                "end_value": 0.0,
+                "years": 0,
+                "cagr": 0.0,
+                "is_cagr": True,
+                "history": [],
+                "final_rate": 0.0,
+                # Backward compatibility keys:
                 "steps": [],
-                "stats": {"mean": 0.0, "stdev": 0.0, "lower_bound": 0.0, "upper_bound": 0.0, "is_filtered": False},
-                "final_rate": 0.0
+                "stats": {"mean": 0.0, "stdev": 0.0, "lower_bound": 0.0, "upper_bound": 0.0, "is_filtered": False}
             }
             return 0.0, "Not enough OCF history.", empty_details
-            
-        yoy_rates_detailed = []
-        for i in range(1, len(ocf_history)):
-            prev_year = ocf_history[i-1]["year"]
-            curr_year = ocf_history[i]["year"]
-            prev = ocf_history[i-1]["value"]
-            curr = ocf_history[i]["value"]
-            if prev > 0:
-                yoy_rates_detailed.append({
-                    "from_year": prev_year,
-                    "to_year": curr_year,
-                    "prev_value": prev,
-                    "curr_value": curr,
-                    "rate": (curr - prev) / prev
-                })
-                
-        yoy_rates = [x["rate"] for x in yoy_rates_detailed]
+
+        # Extract the last 10 years of OCF data
+        subset = ocf_history[-10:] if len(ocf_history) >= 10 else ocf_history
         
-        if not yoy_rates:
-            empty_details = {
-                "steps": [],
-                "stats": {"mean": 0.0, "stdev": 0.0, "lower_bound": 0.0, "upper_bound": 0.0, "is_filtered": False},
-                "final_rate": 0.0
-            }
-            return 0.0, "No valid OCF growth rates.", empty_details
-            
-        if len(yoy_rates) < 3:
-            mean = statistics.mean(yoy_rates)
-            rationale = f"Calculated simple average due to limited data: {mean:.2%}"
-            steps = [
-                {
-                    "from_year": x["from_year"],
-                    "to_year": x["to_year"],
-                    "prev_value": x["prev_value"],
-                    "curr_value": x["curr_value"],
-                    "rate": x["rate"],
-                    "is_included": True
-                }
-                for x in yoy_rates_detailed
-            ]
-            details = {
-                "steps": steps,
-                "stats": {
-                    "mean": mean,
-                    "stdev": 0.0,
-                    "lower_bound": mean,
-                    "upper_bound": mean,
-                    "is_filtered": False
-                },
-                "final_rate": mean
-            }
-            return mean, rationale, details
-            
-        mean = statistics.mean(yoy_rates)
-        stdev = statistics.stdev(yoy_rates)
-        lower_bound = mean - stdev
-        upper_bound = mean + stdev
-        
-        valid_rates = [r for r in yoy_rates if lower_bound <= r <= upper_bound]
-        windage_gr = statistics.mean(valid_rates) if valid_rates else mean
-        
-        steps = [
-            {
-                "from_year": x["from_year"],
-                "to_year": x["to_year"],
-                "prev_value": x["prev_value"],
-                "curr_value": x["curr_value"],
-                "rate": x["rate"],
-                "is_included": lower_bound <= x["rate"] <= upper_bound
-            }
-            for x in yoy_rates_detailed
-        ]
-        
+        start_year = subset[0]["year"]
+        end_year = subset[-1]["year"]
+        start_val = subset[0]["value"]
+        end_val = subset[-1]["value"]
+        years = end_year - start_year
+
+        # Handle mathematically invalid cases for CAGR (start <= 0 or end < 0 or years <= 0)
+        if start_val <= 0 or end_val < 0 or years <= 0:
+            cagr = -0.01  # Default to a negative number to trigger fallback
+            rationale = (
+                f"Operating Cash Flow CAGR is mathematically undefined because the starting value "
+                f"was negative/zero (${start_val:,.2f} in {start_year}) or the ending value was "
+                f"negative (${end_val:,.2f} in {end_year}). Falling back to Net Income CAGR."
+            )
+        else:
+            cagr = (end_val / start_val) ** (1 / years) - 1
+            rationale = (
+                f"Compound Annual Growth Rate (CAGR) of Operating Cash Flow over the last {years} years "
+                f"({start_year} to {end_year}): {cagr:.2%}"
+            )
+
         details = {
-            "steps": steps,
+            "start_year": start_year,
+            "start_value": start_val,
+            "end_year": end_year,
+            "end_value": end_val,
+            "years": years,
+            "cagr": cagr,
+            "is_cagr": True,
+            "history": [{"year": x["year"], "value": x["value"]} for x in subset],
+            "final_rate": cagr,
+            # Backward compatibility keys:
+            "steps": [],
             "stats": {
-                "mean": mean,
-                "stdev": stdev,
-                "lower_bound": lower_bound,
-                "upper_bound": upper_bound,
-                "is_filtered": True
-            },
-            "final_rate": windage_gr
+                "mean": cagr,
+                "stdev": 0.0,
+                "lower_bound": cagr,
+                "upper_bound": cagr,
+                "is_filtered": False
+            }
         }
-        
-        rationale = f"Average of 10-year OCF growth rates within 1 standard deviation. Raw rates: {[round(r, 2) for r in yoy_rates]}. Valid average: {windage_gr:.2%}"
-        return windage_gr, rationale, details
+        return cagr, rationale, details
 
     def calculate_10_cap(self, net_income: float, da: float, capex: float, market_cap: float) -> tuple[float, float, str]:
         """Method A: 10-Cap Owner Earnings"""

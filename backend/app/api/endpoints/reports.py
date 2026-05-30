@@ -13,6 +13,7 @@ async def get_growth_analysis(ticker: str, force_fresh: bool = False):
     If not found or force_fresh is true, it gathers financial context, generates the analysis using Gemini,
     caches the result in the database, and returns it.
     """
+    ticker = ticker.upper()
     try:
         # Check DB first
         company_data = db.get_company_data(ticker)
