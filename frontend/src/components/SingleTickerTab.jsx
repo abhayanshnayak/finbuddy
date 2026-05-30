@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatLargeNumber } from '../utils/formatters';
 
-export default function SingleTickerTab({ initialTicker }) {
+export default function SingleTickerTab({ initialTicker, onBack }) {
   const [ticker, setTicker] = useState('');
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -88,6 +88,17 @@ export default function SingleTickerTab({ initialTicker }) {
 
   return (
           <div className="space-y-8 animate-in fade-in duration-300">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 hover:border-slate-300 shadow-sm transition-all duration-205 self-start cursor-pointer group"
+              >
+                <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span>Back to Search Results</span>
+              </button>
+            )}
             {/* Search Dashboard Box */}
             <div className="flex flex-col items-center justify-center space-y-4 py-12 bg-white rounded-3xl shadow-sm border border-gray-100">
               <h2 className="text-2xl font-bold text-gray-800">Analyze a Company</h2>

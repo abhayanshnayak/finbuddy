@@ -42,6 +42,20 @@ export default function Header({ activeTab, setActiveTab }) {
               </svg>
               <span>Bulk Ingestion Hub</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab('tags')}
+              className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                activeTab === 'tags'
+                  ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50/50'
+              }`}
+            >
+              <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M7 7h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span>Tag Search Workspace</span>
+            </button>
           </div>
         </div>
   );

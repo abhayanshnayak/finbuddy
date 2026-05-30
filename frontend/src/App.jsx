@@ -2,12 +2,12 @@ import { useState } from 'react';
 import Header from './components/Header';
 import SingleTickerTab from './components/SingleTickerTab';
 import BulkIngestionTab from './components/BulkIngestionTab';
+import TagSearchTab from './components/TagSearchTab';
 import TermsOfService from './components/TermsOfService';
 
 function App() {
   const [activeTab, setActiveTab] = useState('single');
   const [targetTicker, setTargetTicker] = useState('');
-
   const handleViewTicker = (ticker) => {
     setTargetTicker(ticker);
     setActiveTab('single');
@@ -19,6 +19,7 @@ function App() {
         <Header activeTab={activeTab} setActiveTab={setActiveTab} />
         {activeTab === 'single' && <SingleTickerTab initialTicker={targetTicker} />}
         {activeTab === 'bulk' && <BulkIngestionTab onViewTicker={handleViewTicker} />}
+        {activeTab === 'tags' && <TagSearchTab />}
         {activeTab === 'tos' && <TermsOfService />}
       </div>
       
