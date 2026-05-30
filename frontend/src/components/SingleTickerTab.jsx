@@ -37,7 +37,7 @@ export default function SingleTickerTab({ initialTicker }) {
 
   // Fetch Growth Analysis when report changes
   useEffect(() => {
-    if (report && ticker && activeTab === 'single') {
+    if (report && ticker) {
       const fetchGrowthAnalysis = async () => {
         setLoadingGrowthAnalysis(true);
         try {
@@ -60,30 +60,8 @@ export default function SingleTickerTab({ initialTicker }) {
     } else {
       setGrowthAnalysis(null);
     }
-  }, [report, ticker, activeTab]);
+  }, [report, ticker]);
 
-  // Directly load report from completed bulk list item
-  const viewSingleTicker = async (targetTicker) => {
-    setTicker(targetTicker.toUpperCase());
-    setActiveTab('single');
-    setLoading(true);
-    setError('');
-    setReport(null);
-    
-    try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiBase}/api/report/${targetTicker}?force_fresh=${singleForceFresh}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch report for ${targetTicker}.`);
-      }
-      const data = await response.json();
-      setReport(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
 
   useEffect(() => {

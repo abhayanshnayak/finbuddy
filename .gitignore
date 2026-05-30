@@ -6,7 +6,7 @@ backend/.env
 backend/.pytest_cache/
 
 # Frontend
-frontend/node_modules/
+node_modules/
 frontend/dist/
 frontend/dist-ssr/
 frontend/.env
