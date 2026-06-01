@@ -262,6 +262,13 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         # Finnhub resolves some tickers to a primary class (e.g., GOOG -> GOOGL)
         actual_ticker = profile.get("ticker", ticker)
         
+        # If the original ticker was US-listed (no dot) but Finnhub resolved it
+        # to a foreign exchange (e.g., TSX ending in .TO), stick to the original
+        # to avoid 403 Forbidden errors on free-tier API keys.
+        if "." not in original_ticker and "." in actual_ticker:
+            print(f"Prevented resolving {original_ticker} to foreign symbol {actual_ticker} to avoid API Key 403 errors.")
+            actual_ticker = original_ticker
+        
         # Check cache again just in case the resolved ticker is cached
         if actual_ticker != ticker and not force_fresh:
             cached_data = db.get_company_data(actual_ticker)
@@ -294,7 +301,20 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
             print(f"AI generation failed, falling back to cached AI analysis for {ticker}")
             ai_analysis = existing_data["ai_analysis"]
         else:
-            raise Exception(f"AI generation failed: {ai_analysis['error']}")
+            print(f"AI generation failed, falling back to placeholder due to AI Studio limits: {ai_analysis['error']}")
+            ai_analysis = {
+                "overview": "AI qualitative analysis is currently unavailable (monthly spending cap exceeded in Google AI Studio). All quantitative audit data, Margin of Safety prices, and growth rate computations have been generated successfully below.",
+                "sector": profile.get("finnhubIndustry", "Unknown"),
+                "subsector": "Unknown",
+                "industry_group": "Unknown",
+                "sources": {"economic_moat": "Unavailable", "management_integrity": "Unavailable", "growth_runway": "Unavailable"},
+                "growth_plans": {"summary": "Unavailable due to API limits", "details": []},
+                "competitors": {"summary": "Unavailable due to API limits", "list": []},
+                "risks": {"summary": "Unavailable due to API limits", "list": []},
+                "moats": {"summary": "Unavailable due to API limits", "list": []},
+                "management": {"summary": "Unavailable due to API limits", "integrity_score": 0},
+                "market_and_bias": {"summary": "Unavailable due to API limits"}
+            }
 
     current_price = finnhub.get_quote(ticker).get("c", 0.0)
     

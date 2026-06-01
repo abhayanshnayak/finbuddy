@@ -2,12 +2,21 @@ import json
 from google import genai
 from .prompts import QUALITATIVE_ANALYSIS_PROMPT, GROWTH_COMPANY_PROMPT
 
+from app.core.config import settings
+
 class AnalystService:
     def __init__(self, project_id: str = None, location: str = "us-central1"):
         self.project_id = project_id
         self.location = location
         try:
-            self.client = genai.Client(api_key="AIzaSyB43_2R4-9Ros7VI9zbvVngXMgP75zP4UY")
+            import os
+            # Read from settings (Pydantic automatically loads from backend/.env) or fallback to os.environ
+            api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
+            if not api_key:
+                print("Error: GEMINI_API_KEY is missing! Please configure it in backend/.env")
+                self.client = None
+            else:
+                self.client = genai.Client(api_key=api_key)
         except Exception as e:
             print(f"Warning: Failed to initialize AI Studio: {e}")
             self.client = None

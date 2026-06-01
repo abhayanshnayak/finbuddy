@@ -11,7 +11,8 @@ def mocker_genai_client(mocker):
     return mock_client
 
 @pytest.fixture
-def service(mocker_genai_client):
+def service(mocker_genai_client, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy_key_for_testing")
     return AnalystService()
 
 def test_analyzeQualitativeValidResponse_returnsParsedDict(service, mocker_genai_client):
