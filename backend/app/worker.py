@@ -7,6 +7,9 @@ from fastapi import APIRouter, Request, Response, status
 from aiolimiter import AsyncLimiter
 from tenacity import retry, wait_exponential_jitter, stop_after_attempt
 
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
 from app.core.config import settings
 from app.services.report_service import generate_and_cache_report
 from app.dependencies import finnhub_client as finnhub, calc_service as calc, ai_service as ai, db_service as db
@@ -15,6 +18,27 @@ router = APIRouter()
 
 # Thread-safe rate limiter: 20 tokens per 60 seconds (margin of safety under Finnhub's 30/min limit)
 limiter = AsyncLimiter(max_rate=20, time_period=60)
+
+def verify_pubsub_token(request: Request, expected_audience: str) -> bool:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        print("[Worker Security] Missing or malformed Authorization header")
+        return False
+    token = auth_header.split(" ")[1]
+    try:
+        # Verify the OIDC ID token using Google public certificates
+        claim = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            audience=expected_audience
+        )
+        if claim.get("iss") not in ["accounts.google.com", "https://accounts.google.com"]:
+            print(f"[Worker Security] Invalid token issuer: {claim.get('iss')}")
+            return False
+        return True
+    except Exception as e:
+        print(f"[Worker Security] Token verification failed: {e}")
+        return False
 
 @retry(
     wait=wait_exponential_jitter(initial=5, max=60, exp_base=2),
@@ -27,6 +51,12 @@ def process_ticker_with_retry(ticker: str, force_fresh: bool, tags: list):
 
 @router.post("/process_and_store_ticker_data")
 async def process_message(request: Request):
+    # Perform OIDC authentication token check if enabled in settings
+    if settings.PUBSUB_VERIFY_TOKEN:
+        aud = settings.PUBSUB_EXPECTED_AUDIENCE or str(request.url)
+        if not verify_pubsub_token(request, aud):
+            return Response(content="Unauthorized", status_code=status.HTTP_401_UNAUTHORIZED)
+
     try:
         envelope = await request.json()
     except Exception as e:

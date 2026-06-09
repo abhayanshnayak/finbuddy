@@ -68,3 +68,41 @@ def test_getBatchStatusInvalidId_returns404(mocker):
     data = response.json()
     assert data["detail"] == "Batch not found"
     mock_db.get_batch.assert_called_once_with("invalid_batch_id")
+
+def test_process_message_unauthorized():
+    payload = {
+        "message": {
+            "data": "eyJ0aWNrZXIiOiAiTVNGVCIsICJiYXRjaF9pZCI6ICJiYXRjaF8xMjMifQ==",
+            "message_id": "12345"
+        }
+    }
+    response = client.post("/process_and_store_ticker_data", json=payload)
+    assert response.status_code == 401
+    assert response.text == "Unauthorized"
+
+def test_process_message_authorized(mocker):
+    # Mock token verification to succeed
+    mocker.patch("app.worker.verify_pubsub_token", return_value=True)
+    
+    mock_db = MagicMock()
+    mock_db.get_batch.return_value = {
+        "symbols": {
+            "MSFT": {"status": "pending"}
+        }
+    }
+    mocker.patch("app.worker.db", mock_db)
+    
+    # Mock executor run to prevent executing actual background reports
+    mocker.patch("asyncio.get_event_loop")
+    
+    payload = {
+        "message": {
+            "data": "eyJ0aWNrZXIiOiAiTVNGVCIsICJiYXRjaF9pZCI6ICJiYXRjaF8xMjMifQ==",
+            "message_id": "12345"
+        }
+    }
+    
+    headers = {"Authorization": "Bearer dummy_token"}
+    response = client.post("/process_and_store_ticker_data", json=payload, headers=headers)
+    assert response.status_code == 200
+
