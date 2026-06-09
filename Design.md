@@ -1,6 +1,7 @@
 # Technical Design: Stock Research App (GCP)
 
 ## Document Overview
+
 This document outlines the technical design for the Stock Research Application, based on the Phase 1 Functional Requirements. The system is designed to be deployed entirely on Google Cloud Platform (GCP). For each major architectural component, multiple options are presented, followed by a recommended approach and rationale.
 
 ---
@@ -14,25 +15,28 @@ This document outlines the technical design for the Stock Research Application, 
 This decision dictates how the frontend user interface and the backend processing engine are structured and hosted.
 
 ### Option A: Separated SPA & Python Backend (Microservices)
-*   **Frontend:** React (Vite) Single Page Application (SPA) hosted on **Cloud Storage** behind a **Cloud CDN** and Cloud Load Balancer.
-*   **Backend:** Python application using FastAPI, containerized and deployed on **Cloud Run**.
-*   **Pros:**
-    *   **Language alignment:** Python is the undisputed king of data manipulation (Pandas) and AI/LLM integration, which is critical for the complex financial math and "Moat" analysis required.
-    *   **Decoupled scaling:** The static frontend is infinitely scalable and cheap via CDN. The backend scales independently based on report generation load.
-*   **Cons:** Requires managing two separate deployment pipelines and handling Cross-Origin Resource Sharing (CORS). **CORS implication:** Because the frontend and backend are hosted on different domains (e.g., `app.domain.com` and `api.domain.com`), the browser will block the frontend from calling the backend by default for security. We will need to explicitly configure the Python backend to accept requests from the frontend's origin.
+
+* **Frontend:** React (Vite) Single Page Application (SPA) hosted on **Cloud Storage** behind a **Cloud CDN** and Cloud Load Balancer.
+* **Backend:** Python application using FastAPI, containerized and deployed on **Cloud Run**.
+* **Pros:**
+  * **Language alignment:** Python is the undisputed king of data manipulation (Pandas) and AI/LLM integration, which is critical for the complex financial math and "Moat" analysis required.
+  * **Decoupled scaling:** The static frontend is infinitely scalable and cheap via CDN. The backend scales independently based on report generation load.
+* **Cons:** Requires managing two separate deployment pipelines and handling Cross-Origin Resource Sharing (CORS). **CORS implication:** Because the frontend and backend are hosted on different domains (e.g., `app.domain.com` and `api.domain.com`), the browser will block the frontend from calling the backend by default for security. We will need to explicitly configure the Python backend to accept requests from the frontend's origin.
 
 ### Option B: Full-Stack Next.js (Monolith)
-*   **Architecture:** A single repository using Next.js for both the React UI and API routes for the backend logic. Deployed as a single container on **Cloud Run**. **Detail:** Next.js is a React framework that allows you to build full-stack web applications. In a monolith setup, the frontend UI components and backend server endpoints (API routes) live in the same codebase. When a user requests the app, the Next.js server can pre-render the UI (SSR) while securely connecting directly to the database or financial APIs from the same Node.js environment without exposing secrets. The entire app is bundled into one Docker image and hosted on Cloud Run.
-*   **Pros:**
-    *   Excellent developer experience with end-to-end TypeScript.
-    *   Simplified deployment (one Docker container).
-    *   Easy Server-Side Rendering (SSR) for fast initial loads.
-*   **Cons:** Node.js/TypeScript lacks the deep ecosystem of financial data libraries (like Pandas) compared to Python, making the complex valuation math slightly more tedious to write and maintain. Additionally, heavy data processing on the Next.js backend could tie up the Node.js event loop, affecting frontend performance.
+
+* **Architecture:** A single repository using Next.js for both the React UI and API routes for the backend logic. Deployed as a single container on **Cloud Run**. **Detail:** Next.js is a React framework that allows you to build full-stack web applications. In a monolith setup, the frontend UI components and backend server endpoints (API routes) live in the same codebase. When a user requests the app, the Next.js server can pre-render the UI (SSR) while securely connecting directly to the database or financial APIs from the same Node.js environment without exposing secrets. The entire app is bundled into one Docker image and hosted on Cloud Run.
+* **Pros:**
+  * Excellent developer experience with end-to-end TypeScript.
+  * Simplified deployment (one Docker container).
+  * Easy Server-Side Rendering (SSR) for fast initial loads.
+* **Cons:** Node.js/TypeScript lacks the deep ecosystem of financial data libraries (like Pandas) compared to Python, making the complex valuation math slightly more tedious to write and maintain. Additionally, heavy data processing on the Next.js backend could tie up the Node.js event loop, affecting frontend performance.
 
 ### Option C: Pure Python Full-Stack (Streamlit)
-*   **Architecture:** UI and backend logic built entirely in Python using Streamlit, deployed to **Cloud Run**.
-*   **Pros:** Extremely fast time-to-market. Single language (Python) for everything.
-*   **Cons:** Limited UI customizability. Does not easily support a highly polished, bespoke consumer-grade interface. Can be difficult to manage complex user state compared to React.
+
+* **Architecture:** UI and backend logic built entirely in Python using Streamlit, deployed to **Cloud Run**.
+* **Pros:** Extremely fast time-to-market. Single language (Python) for everything.
+* **Cons:** Limited UI customizability. Does not easily support a highly polished, bespoke consumer-grade interface. Can be difficult to manage complex user state compared to React.
 
 > [!IMPORTANT]
 > **Preferred Decision: Option A (Separated SPA & Python Backend)**
@@ -45,21 +49,24 @@ This decision dictates how the frontend user interface and the backend processin
 The report requires both hard quantitative data (10-year FCF, EPS) and soft qualitative analysis (Competitors, Moat, Sentiment).
 
 ### Option A: Hybrid (Financial API + Vertex AI)
-*   **Architecture:** 
-    *   **Quantitative:** Use a structured financial API. Specifically, use the **Finnhub API (https://finnhub.io/docs/api/introduction)** to fetch historical 10-year statements and company information. The Python backend performs the exact math for Payback Time and Margin of Safety.
-    *   **Qualitative:** Use **Google Vertex AI (Gemini Pro)** to synthesize the "Meaning," "Moat," and "Management Quality" sections by providing it with company context and utilizing Google Search grounding.
-*   **Pros:** Best of both worlds. Absolute mathematical precision for valuations (preventing LLM hallucinations), combined with powerful reasoning for subjective analysis.
-*   **Cons:** Requires managing subscriptions and rate limits for third-party financial APIs.
+
+* **Architecture:**
+  * **Quantitative:** Use a structured financial API. Specifically, use the **Finnhub API (<https://finnhub.io/docs/api/introduction>)** to fetch historical 10-year statements and company information. The Python backend performs the exact math for Payback Time and Margin of Safety.
+  * **Qualitative:** Use **Google Vertex AI (Gemini Pro)** to synthesize the "Meaning," "Moat," and "Management Quality" sections by providing it with company context and utilizing Google Search grounding.
+* **Pros:** Best of both worlds. Absolute mathematical precision for valuations (preventing LLM hallucinations), combined with powerful reasoning for subjective analysis.
+* **Cons:** Requires managing subscriptions and rate limits for third-party financial APIs.
 
 ### Option B: Pure LLM Agent with Search
-*   **Architecture:** Rely entirely on an LLM Agent (Vertex AI) equipped with web search and calculator tools to find both qualitative context and quantitative historical data.
-*   **Pros:** Simpler architecture (no third-party API contracts).
-*   **Cons:** High risk of LLM hallucination for precise financial figures. Finding exactly 10 years of specific accounting line items (like Free Cash Flow) via search dynamically is slow and unreliable.
+
+* **Architecture:** Rely entirely on an LLM Agent (Vertex AI) equipped with web search and calculator tools to find both qualitative context and quantitative historical data.
+* **Pros:** Simpler architecture (no third-party API contracts).
+* **Cons:** High risk of LLM hallucination for precise financial figures. Finding exactly 10 years of specific accounting line items (like Free Cash Flow) via search dynamically is slow and unreliable.
 
 ### Option C: Custom Data Warehouse (BigQuery)
-*   **Architecture:** Ingest daily bulk data dumps from a provider (e.g., Sharadar/Quandl) into **BigQuery**. The Python backend queries BigQuery directly.
-*   **Pros:** Complete control over data. Potentially lower per-query cost at a massive scale.
-*   **Cons:** Massive upfront engineering effort to build ETL pipelines. Overkill for Phase 1.
+
+* **Architecture:** Ingest daily bulk data dumps from a provider (e.g., Sharadar/Quandl) into **BigQuery**. The Python backend queries BigQuery directly.
+* **Pros:** Complete control over data. Potentially lower per-query cost at a massive scale.
+* **Cons:** Massive upfront engineering effort to build ETL pipelines. Overkill for Phase 1.
 
 > [!IMPORTANT]
 > **Preferred Decision: Option A (Hybrid Financial API + Vertex AI)**
@@ -72,11 +79,13 @@ The report requires both hard quantitative data (10-year FCF, EPS) and soft qual
 We need to cache stock symbols for the autocomplete feature, and crucially, store the raw financial API responses and the computed numbers (like Windage Growth and FCF) that go into the report. Storing the final generated report itself is a secondary concern, as it can be easily regenerated on-the-fly if the underlying data and calculations are saved.
 
 ### Option A: Firestore (NoSQL)
-*   **Architecture:** Use **Cloud Firestore** in Native mode.
-    *   **Data Model & Keys:** Data will be organized hierarchically. The top-level collection will be `companies`, where each document's unique ID is the **Stock Ticker Symbol** (e.g., `AAPL`), allowing for instant O(1) lookups. To optimize reads and avoid downloading massive payloads unnecessarily, we will use **Subcollections** to separate heavy financial data from qualitative text.
-    
+
+* **Architecture:** Use **Cloud Firestore** in Native mode.
+  * **Data Model & Keys:** Data will be organized hierarchically. The top-level collection will be `companies`, where each document's unique ID is the **Stock Ticker Symbol** (e.g., `AAPL`), allowing for instant O(1) lookups. To optimize reads and avoid downloading massive payloads unnecessarily, we will use **Subcollections** to separate heavy financial data from qualitative text.
+
     **Example Structure:**
-    *   **Collection:** `companies` -> **Document:** `AAPL` (Contains basic top-level info)
+  * **Collection:** `companies` -> **Document:** `AAPL` (Contains basic top-level info)
+
         ```json
         {
           "ticker": "AAPL",
@@ -91,7 +100,9 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
           "last_updated_pst": "3 May 03:00am"
         }
         ```
-        *   **Subcollection:** `financials` -> **Document:** `raw_data`
+
+    * **Subcollection:** `financials` -> **Document:** `raw_data`
+
             ```json
             {
               "timestamp": "2026-05-03T10:00:00Z",
@@ -107,7 +118,9 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               "cash_and_equivalents": 61555000000
             }
             ```
-        *   **Subcollection:** `financials` -> **Document:** `derived_metrics`
+
+    * **Subcollection:** `financials` -> **Document:** `derived_metrics`
+
             ```json
             {
               "timestamp": "2026-05-03T10:01:00Z",
@@ -128,7 +141,9 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               "ev_to_revenue": 8.5
             }
             ```
-        *   **Subcollection:** `financials` -> **Document:** `valuations`
+
+    * **Subcollection:** `financials` -> **Document:** `valuations`
+
             ```json
             {
               "timestamp": "2026-05-03T10:02:00Z",
@@ -147,20 +162,26 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               "computation_payback_details": "Accumulated projected FCF reaches 1,500 by Year 8, which exceeds the current Market Cap."
             }
             ```
-        *   **Subcollection:** `qualitative` -> **Document:** `sources`
+
+    * **Subcollection:** `qualitative` -> **Document:** `sources`
+
             ```json
             {
               "source_links": ["https://sec.gov/aapl/10k", "https://news.ycombinator.com/item?id=..."]
             }
             ```
-        *   **Subcollection:** `qualitative` -> **Document:** `growth_plans`
+
+    * **Subcollection:** `qualitative` -> **Document:** `growth_plans`
+
             ```json
             {
               "strategy_summary": "Expanding into AI hardware and services...",
               "key_initiatives": ["Apple Intelligence rollout", "Services revenue expansion"]
             }
             ```
-        *   **Subcollection:** `qualitative` -> **Document:** `competitors`
+
+    * **Subcollection:** `qualitative` -> **Document:** `competitors`
+
             ```json
             {
               "competitor_list": [
@@ -175,7 +196,9 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               ]
             }
             ```
-        *   **Subcollection:** `qualitative` -> **Document:** `risks`
+
+    * **Subcollection:** `qualitative` -> **Document:** `risks`
+
             ```json
             {
               "key_risks": [
@@ -190,7 +213,9 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               ]
             }
             ```
-        *   **Subcollection:** `qualitative` -> **Document:** `moats`
+
+    * **Subcollection:** `qualitative` -> **Document:** `moats`
+
             ```json
             {
               "moat_types": [
@@ -208,7 +233,9 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               "competitor_comparison": "Apple's ecosystem moat is significantly stronger than Samsung's purely hardware-based brand moat, resulting in higher margin retention and pricing power across global markets."
             }
             ```
-        *   **Subcollection:** `qualitative` -> **Document:** `management`
+
+    * **Subcollection:** `qualitative` -> **Document:** `management`
+
             ```json
             {
               "roe_3_yr_avg": 1.50,
@@ -223,7 +250,9 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               "board_of_directors_summary": "Highly experienced board with strong tenure and backgrounds in global retail, defense, and technology."
             }
             ```
-        *   **Subcollection:** `context` -> **Document:** `market_and_bias`
+
+    * **Subcollection:** `context` -> **Document:** `market_and_bias`
+
             ```json
             {
               "gurus_buying": ["Warren Buffett", "Bill Ackman"],
@@ -286,9 +315,13 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               ]
             }
             ```
-        *   **Subcollection:** `context` -> **Document:** `growth_company_analysis`
+
+    * **Subcollection:** `context` -> **Document:** `growth_company_analysis`
+
 #### `growth_company_analysis` Object (JSON)
+
 *Stored inside `context`*
+
 ```json
 {
   "cash_burn": {
@@ -310,21 +343,24 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
   "generated_at": "2026-05-22T10:00:00Z"
 }
 ```
-*   **Pros:**
-    *   **Serverless:** Scales to zero, aligns perfectly with Cloud Run.
-    *   **Schema-less:** Does not require pre-defined tables or columns. When the Python backend receives varying, deeply nested JSON responses from Finnhub (where established companies have 10 years of data but recent IPOs have 1 year), it can dump the raw JSON straight into the database as a Document without breaking a strict schema.
-    *   **Real-time:** Can easily push updates to the UI if report generation takes a long time.
-*   **Cons:** Complex relational queries (e.g., "find all reports where ROE > 15%") are difficult or require index planning.
+
+* **Pros:**
+  * **Serverless:** Scales to zero, aligns perfectly with Cloud Run.
+  * **Schema-less:** Does not require pre-defined tables or columns. When the Python backend receives varying, deeply nested JSON responses from Finnhub (where established companies have 10 years of data but recent IPOs have 1 year), it can dump the raw JSON straight into the database as a Document without breaking a strict schema.
+  * **Real-time:** Can easily push updates to the UI if report generation takes a long time.
+* **Cons:** Complex relational queries (e.g., "find all reports where ROE > 15%") are difficult or require index planning.
 
 ### Option B: Cloud SQL (PostgreSQL)
-*   **Architecture:** Managed PostgreSQL instance on **Cloud SQL**.
-*   **Pros:** Excellent for structured relational data and complex querying. ACID compliance.
-*   **Cons:** Higher baseline cost (always-on instance). Requires managing schema migrations. Storing large JSON reports in relational columns can be clunky compared to a document DB.
+
+* **Architecture:** Managed PostgreSQL instance on **Cloud SQL**.
+* **Pros:** Excellent for structured relational data and complex querying. ACID compliance.
+* **Cons:** Higher baseline cost (always-on instance). Requires managing schema migrations. Storing large JSON reports in relational columns can be clunky compared to a document DB.
 
 ### Option C: Cloud Storage + Memorystore (Redis)
-*   **Architecture:** Save the final generated reports as JSON files directly in **Cloud Storage**. Use **Memorystore (Redis)** for caching financial API responses and the autocomplete ticker list.
-*   **Pros:** Cloud Storage is the cheapest way to store large files. Redis provides lightning-fast caching.
-*   **Cons:** Difficult to query or filter past reports by metadata. Adds architectural complexity (managing two storage systems). Furthermore, Memorystore is highly volatile (data is stored in RAM), meaning any server restart or crash will completely wipe out the cached data, making it unsuitable for persistent storage of critical data.
+
+* **Architecture:** Save the final generated reports as JSON files directly in **Cloud Storage**. Use **Memorystore (Redis)** for caching financial API responses and the autocomplete ticker list.
+* **Pros:** Cloud Storage is the cheapest way to store large files. Redis provides lightning-fast caching.
+* **Cons:** Difficult to query or filter past reports by metadata. Adds architectural complexity (managing two storage systems). Furthermore, Memorystore is highly volatile (data is stored in RAM), meaning any server restart or crash will completely wipe out the cached data, making it unsuitable for persistent storage of critical data.
 
 > [!IMPORTANT]
 > **Preferred Decision: Option A (Firestore)**
@@ -337,16 +373,19 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
 The user must be able to download the report.
 
 ### Option A: Frontend PDF Generation (jsPDF / html2pdf)
-*   **Pros:** Zero server cost. PDF is generated entirely in the user's browser using the DOM.
-*   **Cons:** Formatting can be inconsistent across different browsers. Hard to enforce strict pagination or headers/footers.
+
+* **Pros:** Zero server cost. PDF is generated entirely in the user's browser using the DOM.
+* **Cons:** Formatting can be inconsistent across different browsers. Hard to enforce strict pagination or headers/footers.
 
 ### Option B: Backend Headless Browser (Puppeteer/Playwright on Cloud Run)
-*   **Pros:** Pixel-perfect PDFs that look exactly like the web UI.
-*   **Cons:** Running headless Chrome inside a Cloud Run container is resource-intensive and increases latency significantly.
+
+* **Pros:** Pixel-perfect PDFs that look exactly like the web UI.
+* **Cons:** Running headless Chrome inside a Cloud Run container is resource-intensive and increases latency significantly.
 
 ### Option C: Backend Markdown/HTML to PDF Library (ReportLab / WeasyPrint in Python)
-*   **Pros:** Very fast, strictly controlled formatting, native to the Python backend.
-*   **Cons:** Requires building a separate layout template for the PDF version distinct from the React UI.
+
+* **Pros:** Very fast, strictly controlled formatting, native to the Python backend.
+* **Cons:** Requires building a separate layout template for the PDF version distinct from the React UI.
 
 > [!TIP]
 > **Preferred Decision: Option A (Frontend Generation) OR Option C (Backend WeasyPrint)**
@@ -359,32 +398,35 @@ The user must be able to download the report.
 To satisfy the Phase 2 requirement of bulk stock ingestion (up to 500 symbols per request), the system must utilize an asynchronous architecture. Processing up to 500 stock reports sequentially via a single synchronous HTTP request is impossible due to browser timeout limits (typically 2 minutes) and Cloud Run HTTP request timeouts (max 60 minutes). Furthermore, executing hundreds of financial fetches and AI analyses in rapid succession requires robust rate-limiting and retry capabilities.
 
 ### Option A: Event-Driven Queue via Google Cloud Pub/Sub (Push Subscription)
-*   **Architecture:**
-    1.  **Request:** The user submits up to 500 tickers in the UI.
-    2.  **API Dispatch:** The FastAPI backend receives the list, validates it, and generates a unique `batch_id`. It includes the state of the "Fresh Data" toggle. It initializes an `ingestion_batches` tracking document in **Cloud Firestore** with status `pending`.
-    3.  **Publishing:** The backend publishes individual messages (one per ticker symbol) to a **Cloud Pub/Sub Topic** (e.g., `stock-ingestion-topic`) with attributes containing the `ticker` and the `batch_id`.
-    4.  **Async Workers:** A dedicated **Cloud Run Worker Service** is configured as a **Push Subscriber** to the Pub/Sub topic.
-    5.  **Processing:** Cloud Run autoscales worker instances to process these push requests in parallel. For each ticker:
-        - The worker checks if valid data exists in Firestore (unless the "Fresh Data" toggle is enabled).
-        - If fetching data, the worker queries Finnhub and Vertex AI, processes 10-Ks, and runs the valuation engine. It records the current stock price and formatted PST timestamp.
-        - The resulting report data is written to Firestore under the `/companies/{ticker}` collection (serving as the persistent cache).
-        - The worker atomically updates the progress in the `ingestion_batches/{batch_id}` document.
-    6.  **Real-Time UI:** The React frontend uses Firestore’s native **`onSnapshot` listener** to watch the `ingestion_batches/{batch_id}` document, rendering a real-time progress bar and status list.
-*   **Pros:**
-    *   **Highly decoupled & resilient:** If a single worker container crashes, Pub/Sub will automatically retry the message with exponential backoff.
-    *   **Infinite, serverless scaling:** Cloud Run automatically scales the worker service based on queue depth, allowing parallel processing of 500 symbols across multiple containers without degrading the performance of the main web API.
-    *   **Cost efficiency:** Scales to zero when no bulk imports are active.
-*   **Cons:** Requires provisioning and managing a Cloud Pub/Sub topic and subscription.
+
+* **Architecture:**
+    1. **Request:** The user submits up to 500 tickers in the UI.
+    2. **API Dispatch:** The FastAPI backend receives the list, validates it, and generates a unique `batch_id`. It includes the state of the "Fresh Data" toggle. It initializes an `ingestion_batches` tracking document in **Cloud Firestore** with status `pending`.
+    3. **Publishing:** The backend publishes individual messages (one per ticker symbol) to a **Cloud Pub/Sub Topic** (e.g., `stock-ingestion-topic`) with attributes containing the `ticker` and the `batch_id`.
+    4. **Async Workers:** A dedicated **Cloud Run Worker Service** is configured as a **Push Subscriber** to the Pub/Sub topic.
+    5. **Processing:** Cloud Run autoscales worker instances to process these push requests in parallel. For each ticker:
+        * The worker checks if valid data exists in Firestore (unless the "Fresh Data" toggle is enabled).
+        * If fetching data, the worker queries Finnhub and Vertex AI, processes 10-Ks, and runs the valuation engine. It records the current stock price and formatted PST timestamp.
+        * The resulting report data is written to Firestore under the `/companies/{ticker}` collection (serving as the persistent cache).
+        * The worker atomically updates the progress in the `ingestion_batches/{batch_id}` document.
+    6. **Real-Time UI:** The React frontend uses Firestore’s native **`onSnapshot` listener** to watch the `ingestion_batches/{batch_id}` document, rendering a real-time progress bar and status list.
+* **Pros:**
+  * **Highly decoupled & resilient:** If a single worker container crashes, Pub/Sub will automatically retry the message with exponential backoff.
+  * **Infinite, serverless scaling:** Cloud Run automatically scales the worker service based on queue depth, allowing parallel processing of 500 symbols across multiple containers without degrading the performance of the main web API.
+  * **Cost efficiency:** Scales to zero when no bulk imports are active.
+* **Cons:** Requires provisioning and managing a Cloud Pub/Sub topic and subscription.
 
 ### Option B: Managed Task Queue via Cloud Tasks
-*   **Architecture:** The FastAPI backend creates individual tasks in a **Google Cloud Tasks Queue** targeting a specific endpoint on the backend (e.g., `/api/ingest-worker`).
-*   **Pros:** Extremely strong rate-limiting controls. We can easily configure Cloud Tasks to dispatch a maximum of 5 tasks per second to avoid hitting third-party API rate limits (such as Finnhub's minute limit).
-*   **Cons:** Standard Cloud Tasks integration binds tasks to specific HTTP endpoints, which can cause processing bottlenecks on the primary API instance unless a separate worker endpoint is properly isolated.
+
+* **Architecture:** The FastAPI backend creates individual tasks in a **Google Cloud Tasks Queue** targeting a specific endpoint on the backend (e.g., `/api/ingest-worker`).
+* **Pros:** Extremely strong rate-limiting controls. We can easily configure Cloud Tasks to dispatch a maximum of 5 tasks per second to avoid hitting third-party API rate limits (such as Finnhub's minute limit).
+* **Cons:** Standard Cloud Tasks integration binds tasks to specific HTTP endpoints, which can cause processing bottlenecks on the primary API instance unless a separate worker endpoint is properly isolated.
 
 ### Option C: Celery with Redis (In-Memory Worker Queue)
-*   **Architecture:** Running a Celery worker pool using an in-memory broker like Redis.
-*   **Pros:** Fast in-memory message delivery, well-known in the Python ecosystem.
-*   **Cons:** Redis is highly volatile and expensive to host as a managed service on GCP (Memorystore Redis does not scale to zero). If the celery container crashes or restarts, all pending bulk tasks are lost.
+
+* **Architecture:** Running a Celery worker pool using an in-memory broker like Redis.
+* **Pros:** Fast in-memory message delivery, well-known in the Python ecosystem.
+* **Cons:** Redis is highly volatile and expensive to host as a managed service on GCP (Memorystore Redis does not scale to zero). If the celery container crashes or restarts, all pending bulk tasks are lost.
 
 > [!IMPORTANT]
 > **Preferred Decision: Option A (Event-Driven Queue via Google Cloud Pub/Sub)**
@@ -399,32 +441,41 @@ The Finnhub API free tier enforces a strict rate limit of **30 requests per minu
 To ensure compliance with the free tier rate limit and maximize reliability, the following multi-tiered strategy will be implemented:
 
 #### A. Queue-Level Throttling (Cloud Tasks vs. Cloud Pub/Sub)
-- **If using Cloud Tasks (Option B):** 
-  - Google Cloud Tasks natively supports queue-level rate limiting. The queue will be configured with a strict `max_dispatches_per_second` limit.
-  - To stay safely within the 30 requests/minute window across all concurrent calls, the queue configuration is tuned as follows:
-    - **Max rate:** `0.3` dispatches/second (guarantees at most 18 tasks/minute).
-    - **Max concurrent dispatches:** `1` (ensures sequential processing to avoid burst violations).
-- **If using Cloud Pub/Sub (Option A):** 
-  - Pub/Sub push subscriptions do not support strict minute-based rate limits natively.
-  - **Workaround:** The **Cloud Run Ingestion Worker** will be restricted to `max-instances = 1` and `concurrency = 1` for the bulk import service. Inside the worker, a custom sliding-window rate-limiter or a simple token-bucket algorithm (persisted in a Firestore document `rate_limits/finnhub` to share state across instances if scaled) will delay processing to guarantee a minimum spacing of 2.0 seconds between external calls.
+
+* **If using Cloud Tasks (Option B):**
+  * Google Cloud Tasks natively supports queue-level rate limiting. The queue will be configured with a strict `max_dispatches_per_second` limit.
+  * To stay safely within the 30 requests/minute window across all concurrent calls, the queue configuration is tuned as follows:
+    * **Max rate:** `0.3` dispatches/second (guarantees at most 18 tasks/minute).
+    * **Max concurrent dispatches:** `1` (ensures sequential processing to avoid burst violations).
+
+* **If using Cloud Pub/Sub (Option A):**
+  * Pub/Sub push subscriptions do not support strict minute-based rate limits natively.
+  * **Workaround:** The **Cloud Run Ingestion Worker** will be restricted to `max-instances = 1` and `concurrency = 1` for the bulk import service. Inside the worker, a custom sliding-window rate-limiter or a simple token-bucket algorithm (persisted in a Firestore document `rate_limits/finnhub` to share state across instances if scaled) will delay processing to guarantee a minimum spacing of 2.0 seconds between external calls.
 
 #### B. Application-Level Token Bucket Limiter
+
 Inside the ingestion worker code, every call to the Finnhub API client is wrapped in a rate-limiting decorator (using libraries like `aiolimiter` or `ratelimit` in Python).
-- **Configuration:** Max 25 tokens per 60 seconds (providing a safety margin under the 30-request limit).
-- **Flow:** If tokens are exhausted, the async thread yields and pauses (`asyncio.sleep`) until new tokens are generated in the bucket.
+
+* **Configuration:** Max 25 tokens per 60 seconds (providing a safety margin under the 30-request limit).
+* **Flow:** If tokens are exhausted, the async thread yields and pauses (`asyncio.sleep`) until new tokens are generated in the bucket.
 
 #### C. Graceful Backoff & Retry Policy
+
 To handle transient network spikes or occasional rate limit violations gracefully:
-- Every external API client call will use **`tenacity`** (Python robust retry library) to automatically catch HTTP `429` status codes.
-- **Retry settings:**
-  - **Backoff:** Exponential backoff with jitter (starting at 5 seconds, up to 60 seconds).
-  - **Special case for 429s:** If a `429` is detected, the worker will parse the `Retry-After` header if present, or dynamically execute a full sleep pause (e.g., 60 seconds) to allow the minute window to reset before attempting the retry.
-  - **Max Retries:** 5 attempts before marking that specific ticker status as `failed` in Firestore.
+
+* Every external API client call will use **`tenacity`** (Python robust retry library) to automatically catch HTTP `429` status codes.
+* **Retry settings:**
+  * **Backoff:** Exponential backoff with jitter (starting at 5 seconds, up to 60 seconds).
+  * **Special case for 429s:** If a `429` is detected, the worker will parse the `Retry-After` header if present, or dynamically execute a full sleep pause (e.g., 60 seconds) to allow the minute window to reset before attempting the retry.
+  * **Max Retries:** 5 attempts before marking that specific ticker status as `failed` in Firestore.
 
 #### Tracking Database Schema (`ingestion_batches`)
+
 To monitor bulk execution in real-time, the system will use the following Firestore schema:
-- **Collection:** `ingestion_batches`
-- **Document:** `{batch_id}`
+
+* **Collection:** `ingestion_batches`
+* **Document:** `{batch_id}`
+
   ```json
   {
     "batch_id": "b7d8f9e0-1234-5678-abcd-1234567890ab",
@@ -442,20 +493,64 @@ To monitor bulk execution in real-time, the system will use the following Firest
   }
   ```
 
+## 6. Cloud Security Architecture
+
+The application implements a zero-trust model for endpoints exposed in the cloud environment to prevent unauthorized resource consumption and secure communications.
+
+### 6.1 Cross-Origin Resource Sharing (CORS) Hardening
+
+To secure communication between the client-side single page application (SPA) and the FastAPI backend:
+
+* The backend's `CORSMiddleware` is configured to only allow requests originating from a strict whitelist defined in `ALLOWED_CORS_ORIGINS`.
+* Whitelisted domains include:
+  * Local development environments: `http://localhost:5173` and `http://127.0.0.1:5173`.
+  * Production frontend hosting domains: `https://gen-lang-client-0826635932.web.app` and `https://gen-lang-client-0826635932.firebaseapp.com`.
+  * The backend Cloud Run service: `https://finbuddy-backend-129277716541.us-central1.run.app`.
+* Requests from any other domain are rejected at the browser level.
+* **Security Gap Mitigated:** Prevents Cross-Site Request Forgery (CSRF) and cross-origin data exposure. It ensures malicious sites cannot interact with the backend API or query endpoints on behalf of a user.
+* **Rationale:** Secures decoupled multi-origin microservices against unauthorized cross-site requests.
+
+### 6.2 Pub/Sub Worker Endpoint Security (OIDC Authentication)
+
+The bulk ingestion worker endpoint `/process_and_store_ticker_data` processes long-running ingestion requests triggered by Pub/Sub messages. Because this endpoint invokes external billing APIs (Finnhub and Vertex AI), it is protected from arbitrary public HTTP calls:
+
+* **Token Verification:** When `PUBSUB_VERIFY_TOKEN` is enabled, the worker checks the `Authorization: Bearer <token>` HTTP header for an OIDC token issued by Google.
+* **Verification Criteria:**
+  * **Signature & Trust:** The token signature is validated against Google's public certificates via the `google-auth` library (`id_token.verify_oauth2_token`).
+  * **Issuer:** The token issuer (`iss`) must be `accounts.google.com` or `https://accounts.google.com`.
+  * **Audience:** The token audience (`aud`) must match the expected service audience (by default, the URL of the worker endpoint itself). This prevents token redirection and replay attacks.
+* Only Google Cloud Pub/Sub subscriptions (associated with a service account granted appropriate invocation permissions) can generate valid tokens to successfully invoke the worker. Unauthenticated/unauthorized requests receive a `401 Unauthorized` response.
+* **Security Gap Mitigated:** Mitigates **Denial of Wallet (DoW)** and unauthorized resource abuse. By preventing external clients from invoking the worker, it shields the application from heavy financial/rate limit costs caused by rogue invocations triggering Gemini AI or Finnhub.
+* **Rationale:** Any public HTTP endpoint that triggers compute-intensive or billable services must verify the authenticity of the caller before running.
+
+### 6.3 Service Account Identity (Least Privilege)
+
+To limit the potential blast radius of a security compromise, all compute processes and background jobs run under dedicated, user-managed Google Cloud Service Accounts (Service IDs) rather than the default highly-privileged Compute Engine service account:
+
+* **Cloud Run Services:** The backend API and bulk ingestion worker are configured to run as a custom service account, which is restricted to the absolute minimum required IAM permissions:
+  * **Firestore Access:** Granted `roles/datastore.user` to read and write stock and batch records.
+  * **Vertex AI Access:** Granted `roles/aiplatform.user` to call Gemini models for qualitative analysis.
+  * **Pub/Sub Publishing:** Granted `roles/pubsub.publisher` to publish bulk stock ingestion messages to the topic.
+* **Pub/Sub Invocation:** The Cloud Pub/Sub push subscription is configured with a dedicated caller service account granted `roles/run.invoker` on the worker service, guaranteeing that only authorized Pub/Sub triggers can successfully invoke the endpoint.
+* **Security Gap Mitigated:** Prevents **Privilege Escalation and Lateral Movement**. If the application is compromised (e.g. through a dependency vulnerability), the attacker only gains access to minimum APIs (Firestore, Vertex AI) rather than full Project Editor permissions.
+* **Rationale:** Reduces compute-level access rights to the bare essentials required to execute functions (Principle of Least Privilege).
+
 ---
 
 ## References & Glossary
 
 ### 2. Backend Engine (Python / FastAPI)
-- **Framework:** FastAPI for rapid REST API development.
-- **AI Integration:** Uses Gemini (AI Studio API) to parse filings and generate insights.
-- **Endpoints:**
-  - `GET /api/stocks/{ticker}`: Triggers the multi-stage ingestion, analysis, and metric calculation pipeline, returning a combined JSON report.
-  - `GET /api/stocks/{ticker}/growth-analysis`: Checks the database for existing growth analysis. If not found, uses Gemini to analyze growth metrics (cash burn, margins, runway, path to profitability) and saves it to the database with a timestamp.
 
-*   **FastAPI:** A modern, incredibly fast web framework for building APIs with Python. It is highly favored for data-heavy and AI applications because it seamlessly handles complex math and integrations (like Pandas or Vertex AI) while providing automatic documentation and high performance.
-*   **Node.js:** A runtime environment that allows you to execute JavaScript on a server (outside of a web browser).
-*   **Next.js:** A full-stack framework built on top of Node.js and React. It takes the UI capabilities of React and adds server-side routing, database connection capabilities, and server-side rendering (SSR), making it a "batteries included" option for building full applications within a single JavaScript codebase.
-*   **Vite:** A purely frontend build tool for projects like React. It bundles JavaScript React code into static assets for the browser (Client-Side Rendering) without providing backend server features, making it ideal to pair with a separate backend like Python/FastAPI.
-*   **Streamlit:** An open-source Python library that makes it easy to create and share custom web apps for machine learning and data science. It allows developers to build interactive UI components directly using Python scripts, bypassing the need to write separate HTML/CSS/JavaScript. While great for rapid prototyping, it is less suited for highly customized, bespoke web experiences.
-*   **Finnhub API:** A powerful stock API providing real-time and historical financial data, which will be the primary source for the quantitative metrics in our valuation models.
+* **Framework:** FastAPI for rapid REST API development.
+
+* **AI Integration:** Uses Gemini (AI Studio API) to parse filings and generate insights.
+* **Endpoints:**
+  * `GET /api/stocks/{ticker}`: Triggers the multi-stage ingestion, analysis, and metric calculation pipeline, returning a combined JSON report.
+  * `GET /api/stocks/{ticker}/growth-analysis`: Checks the database for existing growth analysis. If not found, uses Gemini to analyze growth metrics (cash burn, margins, runway, path to profitability) and saves it to the database with a timestamp.
+
+* **FastAPI:** A modern, incredibly fast web framework for building APIs with Python. It is highly favored for data-heavy and AI applications because it seamlessly handles complex math and integrations (like Pandas or Vertex AI) while providing automatic documentation and high performance.
+* **Node.js:** A runtime environment that allows you to execute JavaScript on a server (outside of a web browser).
+* **Next.js:** A full-stack framework built on top of Node.js and React. It takes the UI capabilities of React and adds server-side routing, database connection capabilities, and server-side rendering (SSR), making it a "batteries included" option for building full applications within a single JavaScript codebase.
+* **Vite:** A purely frontend build tool for projects like React. It bundles JavaScript React code into static assets for the browser (Client-Side Rendering) without providing backend server features, making it ideal to pair with a separate backend like Python/FastAPI.
+* **Streamlit:** An open-source Python library that makes it easy to create and share custom web apps for machine learning and data science. It allows developers to build interactive UI components directly using Python scripts, bypassing the need to write separate HTML/CSS/JavaScript. While great for rapid prototyping, it is less suited for highly customized, bespoke web experiences.
+* **Finnhub API:** A powerful stock API providing real-time and historical financial data, which will be the primary source for the quantitative metrics in our valuation models.

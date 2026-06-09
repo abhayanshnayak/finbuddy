@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
 
     # Security Configuration
-    ALLOWED_CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,https://gen-lang-client-0826635932.web.app,https://gen-lang-client-0826635932.firebaseapp.com"
+    ALLOWED_CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,https://gen-lang-client-0826635932.web.app,https://gen-lang-client-0826635932.firebaseapp.com,https://finbuddy-backend-129277716541.us-central1.run.app,https://storage.googleapis.com"
     PUBSUB_VERIFY_TOKEN: bool = True
     PUBSUB_EXPECTED_AUDIENCE: Optional[str] = None
 
