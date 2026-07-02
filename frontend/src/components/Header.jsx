@@ -114,8 +114,54 @@ export default function Header({ activeTab, setActiveTab }) {
 
   return (
     <div className="flex items-center justify-between py-3 animate-fadeIn relative z-40">
-      {/* Left: Logo + active page name */}
+      {/* Left: Hamburger + Logo + active page name */}
       <div className="flex items-center space-x-3 w-auto lg:w-1/4">
+        {/* Hamburger menu */}
+        <div className="relative flex-shrink-0" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className={`p-2 rounded-xl transition-all duration-200 cursor-pointer
+                       ${menuOpen 
+                         ? 'bg-gray-200 text-gray-700' 
+                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'}`}
+            title="Navigation"
+          >
+            {menuOpen ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
+
+          {/* Dropdown */}
+          {menuOpen && (
+            <div className="absolute left-0 mt-2 w-56 bg-white rounded-xl shadow-xl shadow-gray-200/60 border border-gray-100 
+                            py-1.5 z-50 animate-menuSlideIn">
+              {NAV_ITEMS.map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => {
+                    setActiveTab(item.key);
+                    setMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center space-x-3 px-4 py-2.5 text-sm transition-colors duration-150 cursor-pointer
+                             ${activeTab === item.key
+                               ? 'bg-blue-50 text-blue-600 font-semibold'
+                               : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Logo */}
         <button
           onClick={() => setActiveTab('landing')}
           className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-1.5 rounded-xl shadow-md shadow-blue-500/15 
@@ -140,50 +186,8 @@ export default function Header({ activeTab, setActiveTab }) {
       {/* Center: Search Portal Target */}
       <div id="header-center-portal" className="flex-1 flex justify-center px-2 sm:px-4" />
 
-      {/* Right: Hamburger menu */}
-      <div className="relative flex justify-end w-auto lg:w-1/4" ref={menuRef}>
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className={`p-2 rounded-xl transition-all duration-200 cursor-pointer flex-shrink-0
-                     ${menuOpen 
-                       ? 'bg-gray-200 text-gray-700' 
-                       : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'}`}
-          title="Navigation"
-        >
-          {menuOpen ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
-
-        {/* Dropdown */}
-        {menuOpen && (
-          <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl shadow-gray-200/60 border border-gray-100 
-                          py-1.5 z-50 animate-menuSlideIn">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.key}
-                onClick={() => {
-                  setActiveTab(item.key);
-                  setMenuOpen(false);
-                }}
-                className={`w-full flex items-center space-x-3 px-4 py-2.5 text-sm transition-colors duration-150 cursor-pointer
-                           ${activeTab === item.key
-                             ? 'bg-blue-50 text-blue-600 font-semibold'
-                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Right: Spacer to maintain centering */}
+      <div className="hidden lg:block w-1/4"></div>
     </div>
   );
 }
