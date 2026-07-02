@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { formatLargeNumber } from '../utils/formatters';
 
 export default function SingleTickerTab({ initialTicker, onBack }) {
@@ -10,6 +11,11 @@ export default function SingleTickerTab({ initialTicker, onBack }) {
   const [singleForceFresh, setSingleForceFresh] = useState(false);
   const [growthAnalysis, setGrowthAnalysis] = useState(null);
   const [loadingGrowthAnalysis, setLoadingGrowthAnalysis] = useState(false);
+  const [portalNode, setPortalNode] = useState(null);
+
+  useEffect(() => {
+    setPortalNode(document.getElementById('header-center-portal'));
+  }, []);
 
   const fetchReport = async (e, overrideTicker) => {
     const targetTicker = overrideTicker || ticker;
@@ -88,72 +94,67 @@ export default function SingleTickerTab({ initialTicker, onBack }) {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Row: Back Button & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Left Side: Back Button or Spacer */}
-        <div className="flex-1">
-          {onBack && (
+      {/* Top Row: Back Button */}
+      {onBack && (
+        <div className="flex items-center">
+          <button
+            onClick={onBack}
+            className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 hover:border-slate-300 shadow-sm transition-all duration-205 cursor-pointer group w-max"
+          >
+            <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span>Back to Search</span>
+          </button>
+        </div>
+      )}
+
+      {/* Teleport the Search Bar into the global Header */}
+      {portalNode && createPortal(
+        <form onSubmit={fetchReport} className="w-full relative max-w-[400px]">
+          <div className="flex items-center bg-white rounded-full shadow-sm border border-slate-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all overflow-hidden pl-4 pr-1.5 py-1">
+            <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value.toUpperCase())}
+              placeholder="Search ticker..."
+              className="flex-1 px-3 py-1.5 bg-transparent border-none outline-none text-slate-800 font-semibold placeholder-slate-400 text-sm"
+            />
             <button
-              onClick={onBack}
-              className="flex items-center space-x-2 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 hover:border-slate-300 shadow-sm transition-all duration-205 cursor-pointer group w-max"
+              type="submit"
+              disabled={loading || !ticker}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-sm transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center min-w-[70px] cursor-pointer"
             >
-              <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              <span>Back to Search</span>
+              {loading ? (
+                <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                "Go"
+              )}
             </button>
-          )}
-        </div>
-
-        {/* Center: Sleek Inline Search Bar */}
-        <div className="flex-1 flex justify-center w-full max-w-md">
-          <form onSubmit={fetchReport} className="w-full relative">
-            <div className="flex items-center bg-white rounded-full shadow-sm border border-slate-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all overflow-hidden pl-4 pr-1.5 py-1.5">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+          </div>
+          
+          {/* Options Row Below Input */}
+          <div className="absolute -bottom-5 left-4 flex items-center px-1 opacity-60 hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+            <label htmlFor="singleForceFresh" className="flex items-center space-x-1.5 cursor-pointer select-none">
               <input
-                type="text"
-                value={ticker}
-                onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                placeholder="Enter ticker (e.g. AAPL)"
-                className="flex-1 px-3 py-1.5 bg-transparent border-none outline-none text-slate-800 font-semibold placeholder-slate-400 text-sm"
+                type="checkbox"
+                id="singleForceFresh"
+                checked={singleForceFresh}
+                onChange={(e) => setSingleForceFresh(e.target.checked)}
+                className="w-3 h-3 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
               />
-              <button
-                type="submit"
-                disabled={loading || !ticker}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-semibold text-sm transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center min-w-[80px] cursor-pointer"
-              >
-                {loading ? (
-                  <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  "Analyze"
-                )}
-              </button>
-            </div>
-            
-            {/* Options Row Below Input */}
-            <div className="flex items-center justify-between mt-2 px-3 opacity-80 hover:opacity-100 transition-opacity">
-              <label htmlFor="singleForceFresh" className="flex items-center space-x-1.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  id="singleForceFresh"
-                  checked={singleForceFresh}
-                  onChange={(e) => setSingleForceFresh(e.target.checked)}
-                  className="w-3 h-3 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
-                />
-                <span className="text-[11px] font-medium text-slate-500">Force Fresh Data</span>
-              </label>
-            </div>
-          </form>
-        </div>
-
-        {/* Right Side: Spacer to keep search centered */}
-        <div className="flex-1 hidden sm:block"></div>
-      </div>
+              <span className="text-[10px] font-medium text-slate-500">Force Fresh Data</span>
+            </label>
+          </div>
+        </form>,
+        portalNode
+      )}
       
       {error && (
         <div className="flex items-center justify-center">

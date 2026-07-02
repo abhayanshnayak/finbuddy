@@ -113,20 +113,20 @@ export default function Header({ activeTab, setActiveTab }) {
   const activeItem = NAV_ITEMS.find((i) => i.key === activeTab);
 
   return (
-    <div className="flex items-center justify-between py-3 animate-fadeIn">
+    <div className="flex items-center justify-between py-3 animate-fadeIn relative z-40">
       {/* Left: Logo + active page name */}
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-3 w-auto lg:w-1/4">
         <button
           onClick={() => setActiveTab('landing')}
           className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-1.5 rounded-xl shadow-md shadow-blue-500/15 
-                     hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-200 cursor-pointer"
+                     hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-200 cursor-pointer flex-shrink-0"
           title="Back to home"
         >
           <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
           </svg>
         </button>
-        <div className="flex items-center space-x-2">
+        <div className="hidden sm:flex items-center space-x-2 whitespace-nowrap">
           <span className="text-lg font-bold text-gray-900 tracking-tight">Finbuddy</span>
           {activeItem && (
             <>
@@ -137,11 +137,14 @@ export default function Header({ activeTab, setActiveTab }) {
         </div>
       </div>
 
+      {/* Center: Search Portal Target */}
+      <div id="header-center-portal" className="flex-1 flex justify-center px-2 sm:px-4" />
+
       {/* Right: Hamburger menu */}
-      <div className="relative" ref={menuRef}>
+      <div className="relative flex justify-end w-auto lg:w-1/4" ref={menuRef}>
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className={`p-2 rounded-xl transition-all duration-200 cursor-pointer
+          className={`p-2 rounded-xl transition-all duration-200 cursor-pointer flex-shrink-0
                      ${menuOpen 
                        ? 'bg-gray-200 text-gray-700' 
                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'}`}
