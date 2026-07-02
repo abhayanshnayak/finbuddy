@@ -15,7 +15,7 @@ function App() {
 
   return (
     <div className="min-h-screen p-8 bg-slate-50 flex flex-col">
-      <div className="max-w-5xl mx-auto w-full flex-grow space-y-8">
+      <div className="w-full flex-grow space-y-8">
         <Header activeTab={activeTab} setActiveTab={setActiveTab} />
         {activeTab === 'single' && <SingleTickerTab initialTicker={targetTicker} />}
         {activeTab === 'bulk' && <BulkIngestionTab onViewTicker={handleViewTicker} />}
