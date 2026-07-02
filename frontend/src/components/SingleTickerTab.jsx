@@ -366,32 +366,71 @@ export default function SingleTickerTab({ initialTicker, onBack }) {
                   </div>
 
                   {/* Core Growth Indicators */}
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 md:col-span-2">
-                    <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Big 4 Growth Rates</h3>
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-gray-600">
-                        <tr>
-                          <th className="p-2 rounded-l-lg">Metric</th>
-                          <th className="p-2 text-right">1Y</th>
-                          <th className="p-2 text-right">3Y</th>
-                          <th className="p-2 text-right">5Y</th>
-                          <th className="p-2 text-right rounded-r-lg">10Y</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(report.financials.derived_metrics.growth_rates_1_3_5_10_yr || {}).map(([key, rates]) => (
-                          <tr key={key} className="border-b border-gray-55 last:border-0 hover:bg-slate-50/40">
-                            <td className="p-2 font-medium capitalize">{key.replace(/_/g, ' ')}</td>
-                            {rates.map((rate, i) => (
-                              <td key={i} className={`p-2 text-right font-mono font-semibold ${rate >= 0.10 ? 'text-green-600' : 'text-red-505'}`}>
-                                {(rate * 100).toFixed(1)}%
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {(() => {
+                    // Map growth rate keys to their raw history arrays
+                    const historyMap = {
+                      revenue: report.financials.raw_data?.revenue_history || [],
+                      net_income: report.financials.raw_data?.net_income_history || [],
+                      book_value: report.financials.raw_data?.book_value_history || [],
+                      operating_cash_flow: report.financials.raw_data?.operating_cash_flow_history || [],
+                    };
+                    const periodsBack = [1, 3, 5, 10]; // matches 1Y, 3Y, 5Y, 10Y column order
+
+                    return (
+                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 md:col-span-2">
+                        <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Big 4 Growth Rates</h3>
+                        <table className="w-full text-sm text-left">
+                          <thead className="bg-gray-50 text-gray-600">
+                            <tr>
+                              <th className="p-2 rounded-l-lg">Metric</th>
+                              <th className="p-2 text-right">
+                                1Y <span className="text-[9px] text-gray-400 font-normal ml-0.5">CAGR</span>
+                              </th>
+                              <th className="p-2 text-right">
+                                3Y <span className="text-[9px] text-gray-400 font-normal ml-0.5">CAGR</span>
+                              </th>
+                              <th className="p-2 text-right">
+                                5Y <span className="text-[9px] text-gray-400 font-normal ml-0.5">CAGR</span>
+                              </th>
+                              <th className="p-2 text-right rounded-r-lg">
+                                10Y <span className="text-[9px] text-gray-400 font-normal ml-0.5">CAGR</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(report.financials.derived_metrics.growth_rates_1_3_5_10_yr || {}).map(([key, rates]) => {
+                              const history = historyMap[key] || [];
+                              const currentVal = history.length > 0 ? history[history.length - 1].value : null;
+
+                              return (
+                                <tr key={key} className="border-b border-gray-55 last:border-0 hover:bg-slate-50/40">
+                                  <td className="p-2 font-medium capitalize">{key.replace(/_/g, ' ')}</td>
+                                  {rates.map((rate, i) => {
+                                    const yearsBack = periodsBack[i];
+                                    const startIdx = history.length - 1 - yearsBack;
+                                    const startVal = startIdx >= 0 ? history[startIdx].value : null;
+
+                                    return (
+                                      <td key={i} className="p-2 text-right">
+                                        <span className={`font-mono font-semibold ${rate >= 0.10 ? 'text-green-600' : 'text-red-505'}`}>
+                                          {(rate * 100).toFixed(1)}%
+                                        </span>
+                                        {startVal !== null && currentVal !== null && (
+                                          <div className="text-[9px] text-gray-400 font-mono mt-0.5 leading-tight">
+                                            {startVal < 0 ? '−' : ''}${formatLargeNumber(Math.abs(startVal))} → {currentVal < 0 ? '−' : ''}${formatLargeNumber(Math.abs(currentVal))}
+                                          </div>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Calculation Transparency & Audit Log */}
