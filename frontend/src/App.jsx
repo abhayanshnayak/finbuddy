@@ -6,7 +6,7 @@ import TagSearchTab from './components/TagSearchTab';
 import TermsOfService from './components/TermsOfService';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('single');
+  const [activeTab, setActiveTab] = useState('landing');
   const [targetTicker, setTargetTicker] = useState('');
   const handleViewTicker = (ticker) => {
     setTargetTicker(ticker);
