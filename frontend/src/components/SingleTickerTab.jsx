@@ -187,6 +187,14 @@ export default function SingleTickerTab({ initialTicker, onBack }) {
                   </div>
                 </div>
 
+                {/* Company Overview */}
+                {report.overview && (
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Business Overview</h3>
+                    <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{report.overview}</p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {/* Valuations Card */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
@@ -963,13 +971,7 @@ export default function SingleTickerTab({ initialTicker, onBack }) {
                   )}
                 </div>
 
-                {/* Company Overview */}
-                {report.overview && (
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                    <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Business Overview</h3>
-                    <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{report.overview}</p>
-                  </div>
-                )}
+
 
                 {/* Qualitative Moat */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
