@@ -52,7 +52,12 @@ class FinancialCalculator:
         return rates
 
     def calculate_windage_growth_rate(self, ocf_history: List[Dict[str, Any]]) -> tuple[float, str, Dict[str, Any]]:
-        """Calculates the 10-year Compound Annual Growth Rate (CAGR) of Operating Cash Flow."""
+        """Calculates the 10-year Compound Annual Growth Rate (CAGR) of Operating Cash Flow.
+        
+        For companies that transitioned from negative to positive OCF (e.g. Uber),
+        the function scans forward to find the first year with positive OCF and
+        computes CAGR from that shorter window instead of giving up entirely.
+        """
         if len(ocf_history) < 2:
             empty_details = {
                 "start_year": None,
@@ -72,29 +77,74 @@ class FinancialCalculator:
 
         # Extract the last 10 years of OCF data
         subset = ocf_history[-10:] if len(ocf_history) >= 10 else ocf_history
-        
-        start_year = subset[0]["year"]
-        end_year = subset[-1]["year"]
-        start_val = subset[0]["value"]
-        end_val = subset[-1]["value"]
+
+        end_idx = len(subset) - 1
+        end_val = subset[end_idx]["value"]
+        end_year = subset[end_idx]["year"]
+
+        # If ending OCF is negative, CAGR is undefined regardless — trigger fallback
+        if end_val < 0:
+            start_val = subset[0]["value"]
+            start_year = subset[0]["year"]
+            years = end_year - start_year
+            cagr = -0.01
+            rationale = (
+                f"Operating Cash Flow CAGR is mathematically undefined because the ending value "
+                f"was negative (${end_val:,.2f} in {end_year}). Falling back to Net Income CAGR."
+            )
+            details = self._build_windage_details(subset, start_year, start_val, end_year, end_val, years, cagr)
+            return cagr, rationale, details
+
+        # Find the first year with positive OCF for a valid CAGR starting point.
+        # This handles companies like Uber that went from negative to positive OCF.
+        start_idx = 0
+        while start_idx < end_idx and subset[start_idx]["value"] <= 0:
+            start_idx += 1
+
+        # If no valid positive-to-positive window exists, trigger fallback
+        if start_idx >= end_idx:
+            start_val = subset[0]["value"]
+            start_year = subset[0]["year"]
+            years = end_year - start_year
+            cagr = -0.01
+            rationale = (
+                f"Operating Cash Flow CAGR is mathematically undefined because no year in the "
+                f"window had positive OCF to use as a starting point. Falling back to Net Income CAGR."
+            )
+            details = self._build_windage_details(subset, start_year, start_val, end_year, end_val, years, cagr)
+            return cagr, rationale, details
+
+        start_val = subset[start_idx]["value"]
+        start_year = subset[start_idx]["year"]
         years = end_year - start_year
 
-        # Handle mathematically invalid cases for CAGR (start <= 0 or end < 0 or years <= 0)
-        if start_val <= 0 or end_val < 0 or years <= 0:
-            cagr = -0.01  # Default to a negative number to trigger fallback
+        if years <= 0:
+            cagr = -0.01
+            rationale = "Operating Cash Flow CAGR requires at least 1 year of history."
+            details = self._build_windage_details(subset, start_year, start_val, end_year, end_val, years, cagr)
+            return cagr, rationale, details
+
+        cagr = (end_val / start_val) ** (1 / years) - 1
+
+        skipped_years = start_idx
+        if skipped_years > 0:
             rationale = (
-                f"Operating Cash Flow CAGR is mathematically undefined because the starting value "
-                f"was negative/zero (${start_val:,.2f} in {start_year}) or the ending value was "
-                f"negative (${end_val:,.2f} in {end_year}). Falling back to Net Income CAGR."
+                f"Compound Annual Growth Rate (CAGR) of Operating Cash Flow over {years} years "
+                f"({start_year} to {end_year}): {cagr:.2%}. "
+                f"Note: {skipped_years} earlier year(s) with non-positive OCF were excluded."
             )
         else:
-            cagr = (end_val / start_val) ** (1 / years) - 1
             rationale = (
                 f"Compound Annual Growth Rate (CAGR) of Operating Cash Flow over the last {years} years "
                 f"({start_year} to {end_year}): {cagr:.2%}"
             )
 
-        details = {
+        details = self._build_windage_details(subset, start_year, start_val, end_year, end_val, years, cagr)
+        return cagr, rationale, details
+
+    def _build_windage_details(self, subset, start_year, start_val, end_year, end_val, years, cagr):
+        """Helper to build the windage details dict with consistent structure."""
+        return {
             "start_year": start_year,
             "start_value": start_val,
             "end_year": end_year,
@@ -114,7 +164,6 @@ class FinancialCalculator:
                 "is_filtered": False
             }
         }
-        return cagr, rationale, details
 
     def calculate_10_cap(self, net_income: float, da: float, capex: float, market_cap: float) -> tuple[float, float, str]:
         """Method A: 10-Cap Owner Earnings"""

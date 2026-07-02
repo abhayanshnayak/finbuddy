@@ -73,15 +73,30 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     
     windage_fallback_message = None
     if windage_gr < 0:
-        ni_10_yr_cagr = growth_rates["net_income"][3] if len(growth_rates["net_income"]) > 3 else 0.0
-        windage_gr = ni_10_yr_cagr
-        windage_rationale = f"Windage growth rate was negative, so the 10-year Net Income growth rate ({windage_gr:.2%}) was used instead."
+        # OCF CAGR was negative or undefined — fall back to Net Income CAGR.
+        # Try progressively shorter windows (10yr → 5yr → 3yr → 1yr) since
+        # companies like Uber may have had negative NI in earlier years too.
+        ni_rates = growth_rates["net_income"]  # [1_yr, 3_yr, 5_yr, 10_yr]
+        ni_cagr = 0.0
+        window_labels = ["1-year", "3-year", "5-year", "10-year"]
+        chosen_label = None
+        for idx in [3, 2, 1, 0]:  # Prefer longest window first
+            if idx < len(ni_rates) and ni_rates[idx] > 0:
+                ni_cagr = ni_rates[idx]
+                chosen_label = window_labels[idx]
+                break
+        windage_gr = ni_cagr
+        if chosen_label:
+            windage_rationale = f"Windage growth rate was negative, so the {chosen_label} Net Income growth rate ({windage_gr:.2%}) was used instead."
+            windage_fallback_message = f"The {chosen_label} Net Income growth rate was used for the windage growth."
+        else:
+            windage_rationale = f"Windage growth rate was negative and no positive Net Income growth rate was available. Defaulting to 0%."
+            windage_fallback_message = "No positive growth rate was available from either OCF or Net Income history."
         computation_windage_details = {
             "steps": [],
             "stats": {"mean": windage_gr, "stdev": 0.0, "lower_bound": windage_gr, "upper_bound": windage_gr, "is_filtered": False},
             "final_rate": windage_gr
-        }
-        windage_fallback_message = "The 10-year Net Income average was used for the windage growth."    
+        }    
     latest_net_income = history["net_income"][-1]["value"] if history.get("net_income") else 0
     latest_da = history["da"][-1]["value"] if history.get("da") else 0
     latest_capex = capex_list[-1]["value"] if capex_list else 0
