@@ -54,7 +54,7 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function Header({ activeTab, setActiveTab }) {
+export default function Header({ activeTab, setActiveTab, theme, toggleTheme }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -82,9 +82,9 @@ export default function Header({ activeTab, setActiveTab }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Finbuddy</h1>
+          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">Finbuddy</h1>
         </div>
-        <p className="text-gray-500 font-medium">Enterprise Stock Ingestion & Value Investing Dashboard</p>
+        <p className="text-gray-500 dark:text-gray-400 font-medium">Enterprise Stock Ingestion & Value Investing Dashboard</p>
 
         {/* Hero Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 w-full max-w-2xl">
@@ -92,18 +92,37 @@ export default function Header({ activeTab, setActiveTab }) {
             <button
               key={item.key}
               onClick={() => setActiveTab(item.key)}
-              className="group flex flex-col items-center p-6 rounded-2xl bg-white border border-gray-200 
-                         hover:border-transparent hover:shadow-xl hover:shadow-gray-200/50 
+              className="group flex flex-col items-center p-6 rounded-2xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 
+                         hover:border-transparent hover:shadow-xl hover:shadow-gray-200/50 dark:hover:shadow-black/50 
                          transition-all duration-300 hover:-translate-y-1 cursor-pointer"
             >
               <div className={`bg-gradient-to-tr ${item.gradient} p-3 rounded-xl shadow-lg ${item.shadow} 
                               mb-3 transition-transform duration-300 group-hover:scale-110`}>
                 {item.heroIcon}
               </div>
-              <span className="text-sm font-semibold text-gray-800">{item.label}</span>
-              <span className="text-xs text-gray-400 mt-1 text-center">{item.description}</span>
+              <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{item.label}</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 mt-1 text-center">{item.description}</span>
             </button>
           ))}
+        </div>
+        
+        {/* Theme Toggle (Landing) */}
+        <div className="absolute top-8 right-8">
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 rounded-xl bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+            title="Toggle theme"
+          >
+            {theme === 'dark' ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
     );
@@ -139,7 +158,7 @@ export default function Header({ activeTab, setActiveTab }) {
 
           {/* Dropdown */}
           {menuOpen && (
-            <div className="absolute left-0 mt-2 w-56 bg-white rounded-xl shadow-xl shadow-gray-200/60 border border-gray-100 
+            <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl shadow-gray-200/60 dark:shadow-black/40 border border-gray-100 dark:border-slate-700 
                             py-1.5 z-50 animate-menuSlideIn">
               {NAV_ITEMS.map((item) => (
                 <button
@@ -150,8 +169,8 @@ export default function Header({ activeTab, setActiveTab }) {
                   }}
                   className={`w-full flex items-center space-x-3 px-4 py-2.5 text-sm transition-colors duration-150 cursor-pointer
                              ${activeTab === item.key
-                               ? 'bg-blue-50 text-blue-600 font-semibold'
-                               : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                               ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold'
+                               : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-white'}`}
                 >
                   {item.icon}
                   <span>{item.label}</span>
@@ -173,11 +192,11 @@ export default function Header({ activeTab, setActiveTab }) {
           </svg>
         </button>
         <div className="hidden sm:flex items-center space-x-2 whitespace-nowrap">
-          <span className="text-lg font-bold text-gray-900 tracking-tight">Finbuddy</span>
+          <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">Finbuddy</span>
           {activeItem && (
             <>
-              <span className="text-gray-300">/</span>
-              <span className="text-sm font-medium text-gray-500">{activeItem.label}</span>
+              <span className="text-gray-300 dark:text-slate-600">/</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-slate-400">{activeItem.label}</span>
             </>
           )}
         </div>
@@ -186,8 +205,24 @@ export default function Header({ activeTab, setActiveTab }) {
       {/* Center: Search Portal Target */}
       <div id="header-center-portal" className="flex-1 flex justify-center px-2 sm:px-4" />
 
-      {/* Right: Spacer to maintain centering */}
-      <div className="hidden lg:block w-1/4"></div>
+      {/* Right: Theme Toggle & Spacer to maintain centering */}
+      <div className="hidden lg:flex w-1/4 justify-end items-center">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-xl transition-all duration-200 cursor-pointer flex-shrink-0 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 hover:text-gray-700 dark:hover:text-slate-200"
+          title="Toggle theme"
+        >
+          {theme === 'dark' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
