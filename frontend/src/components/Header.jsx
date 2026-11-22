@@ -82,7 +82,7 @@ export default function Header({ activeTab, setActiveTab, theme, toggleTheme }) 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">Finbuddy</h1>
+          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">StockClue</h1>
         </div>
         <p className="text-gray-500 dark:text-gray-400 font-medium">Enterprise Stock Ingestion & Value Investing Dashboard</p>
 
@@ -192,7 +192,7 @@ export default function Header({ activeTab, setActiveTab, theme, toggleTheme }) 
           </svg>
         </button>
         <div className="hidden sm:flex items-center space-x-2 whitespace-nowrap">
-          <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">Finbuddy</span>
+          <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">StockClue</span>
           {activeItem && (
             <>
               <span className="text-gray-300 dark:text-slate-600">/</span>

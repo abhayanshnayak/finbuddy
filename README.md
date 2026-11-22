@@ -1,4 +1,4 @@
-# Finbuddy
+# StockClue
 
 ## License and Commercial Use
 

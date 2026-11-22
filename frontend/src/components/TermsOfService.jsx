@@ -8,13 +8,13 @@ function TermsOfService() {
       </div>
       <div className="p-6 space-y-6 text-slate-700 leading-relaxed">
         <p className="font-semibold text-red-600">
-          PLEASE READ THIS DISCLAIMER CAREFULLY BEFORE USING FINBUDDY.
+          PLEASE READ THIS DISCLAIMER CAREFULLY BEFORE USING STOCKCLUE.
         </p>
 
         <div>
           <h3 className="font-bold text-lg mb-2">1. No Financial Advice</h3>
           <p>
-            The information, analysis, and data provided by Finbuddy (the "Service") are for informational and educational purposes only. Nothing contained on this Service constitutes financial, investment, legal, or tax advice. You should not make any financial or investment decisions based on the AI-generated reports or financial metrics displayed here.
+            The information, analysis, and data provided by StockClue (the "Service") are for informational and educational purposes only. Nothing contained on this Service constitutes financial, investment, legal, or tax advice. You should not make any financial or investment decisions based on the AI-generated reports or financial metrics displayed here.
           </p>
         </div>
 

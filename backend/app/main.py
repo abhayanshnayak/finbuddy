@@ -5,7 +5,7 @@ from app.api.router import api_router
 from app.worker import router as worker_router
 from app.core.config import settings
 
-app = FastAPI(title="Finbuddy Stock Research API")
+app = FastAPI(title="StockClue Stock Research API")
 
 # Parse allowed CORS origins from settings
 origins = [origin.strip() for origin in settings.ALLOWED_CORS_ORIGINS.split(",") if origin.strip()]

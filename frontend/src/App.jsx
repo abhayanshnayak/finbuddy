@@ -42,7 +42,7 @@ function App() {
       </div>
       
       <footer className="mt-16 pb-4 text-center text-sm text-slate-400 dark:text-slate-500">
-        By using Finbuddy, you acknowledge and agree to our{' '}
+        By using StockClue, you acknowledge and agree to our{' '}
         <button 
           onClick={() => setActiveTab('tos')} 
           className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:underline font-medium transition-colors cursor-pointer"
