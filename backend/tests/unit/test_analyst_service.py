@@ -133,3 +133,52 @@ def test_analyzeQualitativePrompt_includesExhaustiveCompetitorFields(service, mo
     assert "how_they_compete" in sent_prompt
     assert "moat_comparison" in sent_prompt
     assert "competitive_dynamics_summary" in sent_prompt
+
+
+def test_analyzeBusinessModelValidResponse_returnsParsedDictAndFormatsPrompt(service, mocker_genai_client):
+    mock_response = MagicMock()
+    mock_response.text = json.dumps({
+        "executive_summary": "Cloud and productivity software compounder.",
+        "revenue_model_archetype": "Usage-Based Cloud + Enterprise SaaS",
+        "earnings_divisions": [
+            {"name": "Intelligent Cloud", "revenue_share_pct": 43.0}
+        ],
+    })
+    mocker_genai_client.models.generate_content.return_value = mock_response
+
+    result = service.analyze_business_model(
+        "Microsoft",
+        {"ticker": "MSFT", "margin_and_efficiency_metrics": {"grossMarginTTM": 69.5}},
+    )
+
+    assert result["revenue_model_archetype"] == "Usage-Based Cloud + Enterprise SaaS"
+    assert result["earnings_divisions"][0]["name"] == "Intelligent Cloud"
+
+    call_kwargs = mocker_genai_client.models.generate_content.call_args.kwargs
+    assert call_kwargs["model"] == "gemini-4-hydrogen"
+    assert call_kwargs["config"].response_mime_type == "application/json"
+    assert _extract_thinking_level(call_kwargs["config"]) == "high"
+
+    sent_prompt = call_kwargs["contents"]
+    assert "Microsoft" in sent_prompt
+    assert "earnings_divisions" in sent_prompt
+    assert "company_unit_economics" in sent_prompt
+    assert "how_it_makes_money" in sent_prompt
+    assert "earnings_kpis" in sent_prompt
+
+
+def test_analyzeBusinessModelFallbackOrder_triesAllModels(service, mocker_genai_client):
+    mocker_genai_client.models.generate_content.side_effect = Exception("API Down")
+
+    result = service.analyze_business_model("Microsoft", {"ticker": "MSFT"})
+
+    assert "error" in result
+    called_models = [
+        (call.kwargs["model"], _extract_thinking_level(call.kwargs["config"]))
+        for call in mocker_genai_client.models.generate_content.call_args_list
+    ]
+    assert called_models == [
+        ("gemini-4-hydrogen", "high"),
+        ("gemini-3.8-flash", "medium"),
+        ("gemini-3.5-flash-lite", "medium"),
+    ]

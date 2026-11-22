@@ -7,6 +7,7 @@ import ExecutiveVerdictStrip from './ticker/ExecutiveVerdictStrip';
 import ValuationSuite from './ticker/ValuationSuite';
 import Big4MetricsSection from './ticker/Big4MetricsSection';
 import AuditTrailDrawer from './ticker/AuditTrailDrawer';
+import BusinessModelSection from './ticker/BusinessModelSection';
 import CompetitorAnalysisSection from './CompetitorAnalysisSection';
 import {
   OverviewAndSentiment,
@@ -22,10 +23,20 @@ const REPORT_SECTIONS = [
   { id: 'section-valuations', label: 'Valuations' },
   { id: 'section-financials', label: 'Big 4 & History' },
   { id: 'section-overview', label: 'Overview' },
+  { id: 'section-business-model', label: 'Business Model' },
   { id: 'section-management', label: 'Management' },
   { id: 'section-moat', label: 'Moat & Rivals' },
   { id: 'section-bias', label: 'Bias Checklist' },
 ];
+
+function hasBusinessModelData(bm) {
+  if (!bm || typeof bm !== 'object' || bm.error) return false;
+  return Boolean(
+    bm.executive_summary ||
+      bm.how_it_makes_money?.core_mechanics ||
+      (Array.isArray(bm.earnings_divisions) && bm.earnings_divisions.length > 0)
+  );
+}
 
 function ReportSkeleton({ symbol }) {
   return (
@@ -87,6 +98,13 @@ export default function SingleTickerTab() {
     loading: false,
   });
 
+  const [businessModelState, setBusinessModelState] = useState({
+    symbol: '',
+    data: null,
+    loading: false,
+    error: '',
+  });
+
   const [auditOpen, setAuditOpen] = useState(false);
   const [activeAuditTab, setActiveAuditTab] = useState('growth');
 
@@ -109,6 +127,53 @@ export default function SingleTickerTab() {
     } catch {
       if (!signal?.aborted) {
         setGrowthState({ symbol: tickerSym, data: null, loading: false });
+      }
+    }
+  }, []);
+
+  const fetchBusinessModel = useCallback(async (tickerSym, forceFresh, signal) => {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    try {
+      const response = await fetch(
+        `${apiBase}/api/stocks/${encodeURIComponent(tickerSym)}/business-model?force_fresh=${forceFresh}`,
+        { signal }
+      );
+      if (signal?.aborted) return;
+      if (response.ok) {
+        const data = await response.json();
+        if (!signal?.aborted) {
+          setBusinessModelState({
+            symbol: tickerSym,
+            data,
+            loading: false,
+            error: '',
+          });
+        }
+      } else {
+        let detail = 'Unable to load business model analysis.';
+        try {
+          const errJson = await response.json();
+          if (errJson?.detail) detail = errJson.detail;
+        } catch {
+          // keep fallback
+        }
+        if (!signal?.aborted) {
+          setBusinessModelState({
+            symbol: tickerSym,
+            data: null,
+            loading: false,
+            error: detail,
+          });
+        }
+      }
+    } catch {
+      if (!signal?.aborted) {
+        setBusinessModelState({
+          symbol: tickerSym,
+          data: null,
+          loading: false,
+          error: 'Unable to reach business model analysis endpoint.',
+        });
       }
     }
   }, []);
@@ -148,6 +213,19 @@ export default function SingleTickerTab() {
         recordRecentTicker(resolvedSym, data.name || resolvedSym);
         setGrowthState({ symbol: resolvedSym, data: null, loading: true });
         fetchGrowthAnalysis(resolvedSym, false, controller.signal);
+
+        const embeddedBusinessModel = data.qualitative?.business_model;
+        if (hasBusinessModelData(embeddedBusinessModel)) {
+          setBusinessModelState({
+            symbol: resolvedSym,
+            data: embeddedBusinessModel,
+            loading: false,
+            error: '',
+          });
+        } else {
+          setBusinessModelState({ symbol: resolvedSym, data: null, loading: true, error: '' });
+          fetchBusinessModel(resolvedSym, false, controller.signal);
+        }
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
@@ -160,7 +238,7 @@ export default function SingleTickerTab() {
       });
 
     return () => controller.abort();
-  }, [normalizedSymbol, fetchGrowthAnalysis, recordRecentTicker]);
+  }, [normalizedSymbol, fetchGrowthAnalysis, fetchBusinessModel, recordRecentTicker]);
 
   // Explicit user-triggered Force Fresh Refresh (does not run on checkbox toggle)
   const handleForceRefresh = useCallback(async () => {
@@ -191,8 +269,26 @@ export default function SingleTickerTab() {
       });
       recordRecentTicker(resolvedSym, data.name || resolvedSym);
       refreshCompanies();
+
+      const embeddedBusinessModel = data.qualitative?.business_model;
+      const followUps = [];
+
       setGrowthState({ symbol: resolvedSym, data: null, loading: true });
-      await fetchGrowthAnalysis(resolvedSym, true);
+      followUps.push(fetchGrowthAnalysis(resolvedSym, true));
+
+      if (hasBusinessModelData(embeddedBusinessModel)) {
+        setBusinessModelState({
+          symbol: resolvedSym,
+          data: embeddedBusinessModel,
+          loading: false,
+          error: '',
+        });
+      } else {
+        setBusinessModelState({ symbol: resolvedSym, data: null, loading: true, error: '' });
+        followUps.push(fetchBusinessModel(resolvedSym, true));
+      }
+
+      await Promise.all(followUps);
     } catch (err) {
       setReportState((prev) => ({
         ...prev,
@@ -201,7 +297,7 @@ export default function SingleTickerTab() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [normalizedSymbol, fetchGrowthAnalysis, recordRecentTicker, refreshCompanies]);
+  }, [normalizedSymbol, fetchGrowthAnalysis, fetchBusinessModel, recordRecentTicker, refreshCompanies]);
 
   const isCurrentSymbolLoaded = reportState.symbol === normalizedSymbol;
   const loading = Boolean(normalizedSymbol) && !isCurrentSymbolLoaded;
@@ -213,6 +309,23 @@ export default function SingleTickerTab() {
   const growthAnalysis = growthState.symbol === activeResolvedSym ? growthState.data : null;
   const loadingGrowthAnalysis =
     Boolean(report) && growthState.symbol === activeResolvedSym && growthState.loading;
+
+  const businessModel =
+    businessModelState.symbol === activeResolvedSym
+      ? businessModelState.data
+      : hasBusinessModelData(report?.qualitative?.business_model)
+        ? report.qualitative.business_model
+        : null;
+  const loadingBusinessModel =
+    Boolean(report) && businessModelState.symbol === activeResolvedSym && businessModelState.loading;
+  const businessModelError =
+    businessModelState.symbol === activeResolvedSym ? businessModelState.error : '';
+
+  const handleRefreshBusinessModel = useCallback(() => {
+    if (!activeResolvedSym) return;
+    setBusinessModelState({ symbol: activeResolvedSym, data: null, loading: true, error: '' });
+    fetchBusinessModel(activeResolvedSym, true);
+  }, [activeResolvedSym, fetchBusinessModel]);
 
   // Dynamic document title
   useEffect(() => {
@@ -357,6 +470,7 @@ export default function SingleTickerTab() {
           <CompanyHeader
             report={report}
             growthAnalysis={growthAnalysis}
+            businessModel={businessModel}
             isFreshFetch={isFreshFetch}
             isRefreshing={isRefreshing}
             onForceRefresh={handleForceRefresh}
@@ -402,6 +516,16 @@ export default function SingleTickerTab() {
 
           {/* 6. Business Overview, Gurus & Primary Sources */}
           <OverviewAndSentiment report={report} />
+
+          {/* 6.5 Business Model, Unit Economics & Earnings Divisions */}
+          <BusinessModelSection
+            key={report.ticker}
+            companyName={report.name}
+            businessModel={businessModel}
+            loading={loadingBusinessModel}
+            error={businessModelError}
+            onRefresh={handleRefreshBusinessModel}
+          />
 
           {/* 7. Strategy & Risks */}
           <StrategyAndRisks report={report} />

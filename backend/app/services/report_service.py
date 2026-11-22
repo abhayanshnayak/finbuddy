@@ -1,4 +1,5 @@
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import pytz
 from typing import List
@@ -33,6 +34,60 @@ def build_growth_analysis_context(ticker: str, name: str, financials: dict, metr
         "latest_cash": financials.get("latest_cash", 0),
         "latest_total_debt": financials.get("latest_total_debt", 0),
         "market_cap": market_cap
+    }
+
+
+def build_business_model_context(ticker: str, name: str, financials: dict, metrics: dict, profile: dict, current_price: float) -> dict:
+    history = (financials or {}).get("history", {})
+    metric_dict = (metrics or {}).get("metric", {}) or {}
+    profile_dict = profile or {}
+
+    revenue_history = history.get("revenue", [])[-5:]
+    net_income_history = history.get("net_income", [])[-5:]
+    ocf_history = history.get("operating_cash_flow", [])[-5:]
+    capex_history = history.get("capex", [])[-5:]
+
+    shares_out = profile_dict.get("shareOutstanding", 0) * 1000000
+    market_cap = (
+        current_price * shares_out
+        if shares_out
+        else metric_dict.get("marketCapitalization", 0) * 1000000
+    )
+
+    margin_and_efficiency_metrics = {
+        key: metric_dict[key]
+        for key in (
+            "grossMarginTTM",
+            "grossMarginAnnual",
+            "operatingMarginTTM",
+            "operatingMarginAnnual",
+            "netProfitMarginTTM",
+            "netProfitMarginAnnual",
+            "roicTTM",
+            "roeTTM",
+            "revenueGrowthTTMYoy",
+            "revenueGrowth5Y",
+            "inventoryTurnoverTTM",
+            "receivablesTurnoverTTM",
+            "assetTurnoverTTM",
+        )
+        if key in metric_dict and metric_dict[key] is not None
+    }
+
+    return {
+        "ticker": ticker,
+        "name": name,
+        "industry": profile_dict.get("finnhubIndustry", "Unknown"),
+        "country": profile_dict.get("country", ""),
+        "exchange": profile_dict.get("exchange", ""),
+        "market_cap": market_cap,
+        "revenue_history_recent": revenue_history,
+        "net_income_history_recent": net_income_history,
+        "operating_cash_flow_history_recent": ocf_history,
+        "capex_history_recent": capex_history,
+        "latest_cash": (financials or {}).get("latest_cash", 0),
+        "latest_total_debt": (financials or {}).get("latest_total_debt", 0),
+        "margin_and_efficiency_metrics": margin_and_efficiency_metrics,
     }
 
 
@@ -308,6 +363,11 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
         },
         "qualitative": {
             "sources": ai_analysis.get("sources", {}),
+            "business_model": (
+                (raw_data.get("context") or {}).get("business_model_analysis")
+                or ai_analysis.get("business_model")
+                or {}
+            ),
             "growth_plans": ai_analysis.get("growth_plans", {}),
             "competitors": ai_analysis.get("competitors", {}),
             "risks": ai_analysis.get("risks", {}),
@@ -388,9 +448,49 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
     except Exception as e:
         raise Exception(f"Failed to fetch stock data for {ticker}: {e}")
 
-    # 3. Prompt AI
-    ai_analysis = ai.analyze_qualitative(profile.get("name", ticker), profile, metrics)
-    
+    current_price = finnhub.get_quote(ticker).get("c", 0.0)
+    company_name = profile.get("name", ticker)
+
+    growth_context = build_growth_analysis_context(
+        ticker=ticker,
+        name=company_name,
+        financials=financials,
+        metrics=metrics,
+        profile=profile,
+        current_price=current_price,
+    )
+    business_model_context = build_business_model_context(
+        ticker=ticker,
+        name=company_name,
+        financials=financials,
+        metrics=metrics,
+        profile=profile,
+        current_price=current_price,
+    )
+
+    # 3. Prompt AI (qualitative, business model, and growth synthesis in parallel)
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        qual_future = executor.submit(ai.analyze_qualitative, company_name, profile, metrics)
+        bm_future = executor.submit(ai.analyze_business_model, company_name, business_model_context)
+        growth_future = executor.submit(ai.analyze_growth_company, company_name, growth_context)
+
+        try:
+            ai_analysis = qual_future.result()
+        except Exception as e:
+            ai_analysis = {"error": str(e)}
+
+        try:
+            business_model_analysis = bm_future.result()
+        except Exception as e:
+            print(f"Failed to generate business model analysis for {ticker}: {e}")
+            business_model_analysis = {"error": str(e)}
+
+        try:
+            growth_analysis = growth_future.result()
+        except Exception as e:
+            print(f"Failed to generate growth analysis for {ticker}: {e}")
+            growth_analysis = {"error": str(e)}
+
     if "error" in ai_analysis:
         if existing_data and "ai_analysis" in existing_data and "error" not in existing_data["ai_analysis"]:
             print(f"AI generation failed, falling back to cached AI analysis for {ticker}")
@@ -416,30 +516,25 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
                 "market_and_bias": {"summary": "Unavailable due to API limits"}
             }
 
-    current_price = finnhub.get_quote(ticker).get("c", 0.0)
-    
-    # 3.5 Generate Growth Analysis
-    try:
-        context_data = build_growth_analysis_context(
-            ticker=ticker,
-            name=profile.get("name", ticker),
-            financials=financials,
-            metrics=metrics,
-            profile=profile,
-            current_price=current_price
+    if isinstance(business_model_analysis, dict) and "error" not in business_model_analysis:
+        business_model_analysis["generated_at"] = datetime.now(pytz.utc).isoformat()
+    else:
+        existing_bm = (existing_data or {}).get("context", {}).get("business_model_analysis")
+        business_model_analysis = (
+            existing_bm
+            if isinstance(existing_bm, dict) and "error" not in existing_bm
+            else {}
         )
-        
-        growth_analysis = ai.analyze_growth_company(profile.get("name", ticker), context_data)
-        if "error" not in growth_analysis:
-            growth_analysis["generated_at"] = datetime.now(pytz.utc).isoformat()
-        else:
-            if existing_data and "context" in existing_data and "growth_company_analysis" in existing_data["context"]:
-                 growth_analysis = existing_data["context"]["growth_company_analysis"]
-            else:
-                 growth_analysis = {}
-    except Exception as e:
-        print(f"Failed to generate growth analysis for {ticker}: {e}")
-        growth_analysis = existing_data.get("context", {}).get("growth_company_analysis", {}) if existing_data else {}
+
+    if isinstance(growth_analysis, dict) and "error" not in growth_analysis:
+        growth_analysis["generated_at"] = datetime.now(pytz.utc).isoformat()
+    else:
+        existing_growth = (existing_data or {}).get("context", {}).get("growth_company_analysis")
+        growth_analysis = (
+            existing_growth
+            if isinstance(existing_growth, dict) and "error" not in existing_growth
+            else {}
+        )
 
     # Generate timestamp in PST
     pst_tz = pytz.timezone('US/Pacific')
@@ -450,7 +545,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
     raw_data = {
         "ticker": ticker,
         "tags": combined_tags,
-        "name": profile.get("name", ticker),
+        "name": company_name,
         "industry": profile.get("finnhubIndustry", "Unknown"),
         "price_at_storage": current_price,
         "last_updated_pst": timestamp_pst,
@@ -459,7 +554,8 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         "financials": financials,
         "ai_analysis": ai_analysis,
         "context": {
-            "growth_company_analysis": growth_analysis
+            "growth_company_analysis": growth_analysis,
+            "business_model_analysis": business_model_analysis,
         }
     }
 

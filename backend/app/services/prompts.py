@@ -123,3 +123,79 @@ GROWTH_COMPANY_PROMPT = """
 
         Return ONLY the raw JSON object. Do not include markdown code blocks.
 """
+
+BUSINESS_MODEL_PROMPT = """
+        You are an expert institutional equity research analyst and professional value investor.
+        Analyze the business model, unit economics, and earnings reporting divisions of: {company_name}.
+        Financial & Profile Context Data: {context_data}
+
+        Conduct an exceptionally thorough, concrete, plain-English yet institutional-grade breakdown of:
+        1. HOW EXACTLY the company makes money — step-by-step monetization mechanics, who pays, what triggers a dollar of revenue, pricing/billing structure, recurring vs. transactional revenue mix, and customer/distribution dynamics.
+        2. UNIT ECONOMICS — both company-wide and per division. Identify the TRUE industry-native economic unit (e.g., per active device + lifetime services attach, per GPU/server rack, per enterprise seat/ARR, per ride/order, per store 4-wall economics, per ad impression/DAU, per loan/earning asset) rather than forcing generic metrics that do not fit the industry. Explain revenue per unit, direct variable costs, gross/contribution margins, customer acquisition / payback or incremental CapEx / ROIC dynamics, fixed vs. variable operating leverage, and cash conversion / working capital mechanics.
+        3. EARNINGS REPORTING DIVISIONS / SEGMENTS — break the business down using the EXACT reportable operating segments and/or disaggregated revenue lines that management reports in its most recent Form 10-K (Segment Information footnote & Item 7 MD&A) and quarterly earnings releases (e.g., Alphabet: Google Search & Other, YouTube Ads, Google Network, Google Subscriptions/Platforms/Devices, Google Cloud, Other Bets; Microsoft: Productivity & Business Processes, Intelligent Cloud, More Personal Computing; Amazon: North America, International, AWS; Apple: iPhone, Services, Mac, iPad, Wearables/Home/Accessories; NVIDIA: Data Center, Gaming, Professional Visualization, Automotive). Order divisions from largest to smallest revenue share. If the company operates as a single reportable segment, break down by the exact disaggregated revenue lines/products management discloses during earnings calls.
+
+        CRITICAL RULES:
+        - Ground every consolidated revenue and margin figure against the provided Financial & Profile Context Data so division numbers reconcile cleanly with the company's actual reported scale.
+        - Format large dollar amounts cleanly using $M or $B (e.g., $105.4B, $420M) — never raw unformatted strings of digits.
+        - Provide numeric percentages (e.g., 42.5 for 42.5%) for `revenue_share_pct` (the division shares should sum to ~100% across all listed earnings divisions) and `margin_pct` (use null ONLY if management does not disclose or reasonably imply segment profitability).
+        - Avoid generic textbook platitudes; cite real products, pricing models, contract terms, cost drivers, and the exact KPIs Wall Street analysts focus on during quarterly earnings calls.
+
+        Return JSON exactly matching this structure:
+        {{
+            "executive_summary": "A crisp 2-3 sentence plain-English distillation of the core money-making engine and how the company's profit pools fit together.",
+            "revenue_model_archetype": "Concise structural label (e.g., 'Hardware Ecosystem + High-Margin Recurring Services', 'Usage-Based Cloud + Enterprise SaaS', 'Digital Advertising Auction + Cloud Infrastructure', 'Two-Sided Marketplace Take-Rate').",
+            "reporting_period_basis": "Exact filing / earnings period used for segment figures (e.g., 'FY2025 Form 10-K Segment Footnote & Latest Quarterly Earnings').",
+            "how_it_makes_money": {{
+                "core_mechanics": "Step-by-step concrete explanation of how a dollar enters the business: who the customers are, what they buy, how the product/service is delivered, and exactly what triggers revenue recognition.",
+                "pricing_and_billing_model": "How pricing works (tiers, seat licenses, consumption/metering, ad auctions, take-rates, upfront hardware + attach, multi-year commitments), billing cadence, deferred revenue / prepayments, and real-world pricing power.",
+                "recurring_vs_transactional_mix": "Concrete breakdown of recurring/contracted/repeat revenue versus one-time/transactional/cyclical revenue, including approximate percentage split and revenue visibility.",
+                "customer_and_channel_dynamics": "Who the end buyers are (enterprise, SMB, consumer, government, advertisers), customer concentration (e.g., top-customer % if disclosed in 10-K), and distribution/GTM channels (direct sales, self-serve, partners, retail, app stores)."
+            }},
+            "company_unit_economics": {{
+                "core_economic_unit": "The primary economic unit analysts model (e.g., 'Active iOS Device & Lifetime Services Attach', 'AI Server System / GPU Cluster', 'Paid Enterprise Seat / ACV', 'Completed Marketplace Order', 'Retail Warehouse Club (4-Wall Economics)').",
+                "unit_economics_summary": "Quantitative walkthrough of one core unit: revenue per unit (ARPU/ASP/ACV/take-rate), direct variable cost per unit, gross & contribution margin, CAC/payback or incremental CapEx & ROIC, and repeat/retention economics.",
+                "cost_structure_and_operating_leverage": "Fixed vs. variable cost anatomy (COGS components, R&D, S&M, D&A/CapEx), gross and operating margin structure, and how each incremental dollar of revenue flows down to operating profit and FCF.",
+                "cash_conversion_and_working_capital": "How accounting revenue converts to free cash flow: negative working capital / upfront cash float vs. inventory, receivables, or heavy CapEx/GPU/store buildouts.",
+                "key_unit_metrics": [
+                    {{
+                        "label": "Industry-native unit economics metric name (provide 4 to 6 metrics, e.g., 'Consolidated Gross Margin', 'Operating Margin', 'ARPU / ASP', 'Take Rate / Net Dollar Retention', 'CapEx Intensity (% Rev)', 'CAC Payback / 4-Wall ROIC')",
+                        "value": "Concrete latest figure or range with units (e.g., '46.2% (FY25)', '$14.50/mo', '21.4% of GMV')",
+                        "context": "1-sentence explanation of the driver and directional trend (expanding, stable, compressing)."
+                    }}
+                ]
+            }},
+            "earnings_divisions": [
+                {{
+                    "name": "Exact Segment or Disaggregated Division Name used during earnings calls & 10-K",
+                    "reporting_basis": "Reportable Operating Segment | Disaggregated Revenue Line | Business Unit",
+                    "strategic_role": "Choose best fit: Primary Cash Cow | Growth Engine | Margin Expander | Ecosystem Funnel | Emerging Bet | Cyclical Core",
+                    "revenue_share_pct": 42.5,
+                    "latest_revenue": "Formatted latest annual revenue with fiscal year (e.g., '$105.4B (FY25)')",
+                    "yoy_growth": "Formatted YoY growth and momentum (e.g., '+19% YoY — accelerating')",
+                    "margin_type": "Operating Margin | Gross Margin | Segment EBITDA Margin | Contribution Margin",
+                    "margin_pct": 37.2,
+                    "margin_summary": "Concrete profitability line (e.g., '37.2% Operating Margin (~$39.2B OpInc) — contributes ~60% of consolidated operating income')",
+                    "revenue_model": "Specific monetization type for THIS division (e.g., 'Usage-based compute/storage + multi-year enterprise commitments')",
+                    "how_it_makes_money": "Concrete explanation of exactly what this division sells, who pays, pricing structure, and revenue drivers.",
+                    "unit_economics": "Division-specific unit economics: the exact unit, ASP/ARPU/take-rate, direct variable costs (e.g., silicon/wafer, cloud hosting, TAC, fulfillment, content licensing), incremental margin, and capital intensity.",
+                    "earnings_kpis": [
+                        {{
+                            "metric": "Exact KPI management highlights and analysts dissect on earnings calls",
+                            "latest_value": "Latest reported value or trend (e.g., '$115B ARR', '+14% YoY', '118% NDR')",
+                            "why_it_matters": "Why this KPI moves the stock and what it signals about unit economics."
+                        }}
+                    ]
+                }}
+            ],
+            "cross_division_synergies_and_profit_pool": "Candid explanation of where consolidated operating profits ACTUALLY come from versus headline revenue mix, and how divisions reinforce, cross-sell, or subsidize each other.",
+            "earnings_watch_items": [
+                "Specific metric, margin inflection, or segment disclosure to verify every quarter on earnings day.",
+                "Another concrete quarterly earnings signal that would confirm thesis strength or warn of unit-economics erosion."
+            ],
+            "sources_referenced": [
+                "Specific 10-K Segment Footnote (e.g., '{company_name} FY2025 Form 10-K, Item 7 MD&A & Note on Segment Information'), recent earnings releases, and investor disclosures."
+            ]
+        }}
+
+        Return ONLY the raw JSON object. Do not include markdown code blocks.
+"""

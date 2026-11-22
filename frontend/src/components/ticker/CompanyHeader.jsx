@@ -19,6 +19,7 @@ import {
 export default function CompanyHeader({
   report,
   growthAnalysis,
+  businessModel,
   isFreshFetch,
   isRefreshing,
   onForceRefresh,
@@ -36,7 +37,7 @@ export default function CompanyHeader({
 
   const handleCopyMarkdown = async () => {
     try {
-      const md = generateReportMarkdown(report, growthAnalysis);
+      const md = generateReportMarkdown(report, growthAnalysis, businessModel);
       await navigator.clipboard.writeText(md);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

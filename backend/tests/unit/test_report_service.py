@@ -1,5 +1,11 @@
 import pytest
-from app.services.report_service import compute_report_from_raw, build_growth_analysis_context
+from unittest.mock import MagicMock
+from app.services.report_service import (
+    compute_report_from_raw,
+    build_growth_analysis_context,
+    build_business_model_context,
+    generate_and_cache_report,
+)
 from app.services.calculator import FinancialCalculator
 
 @pytest.fixture
@@ -315,4 +321,104 @@ def test_computeReportFromRawHyperGrowthStock_appliesCombinedAnchorDecayToMosAnd
     assert fcf_rows[-1]["growth_rate"] == pytest.approx(0.12)
     assert fcf_rows[-1]["cumulative_fcf"] > fcf_rows[0]["cumulative_fcf"]
     assert "linearly faded" in valuations["computation_payback_details"].lower()
+
+
+def test_buildBusinessModelContextAllDataPresent_extractsRecentHistoryAndMargins():
+    financials = {
+        "latest_cash": 50e9,
+        "latest_total_debt": 20e9,
+        "history": {
+            "revenue": [{"year": 2019 + i, "value": (100 + i * 10) * 1e9} for i in range(7)],
+            "net_income": [{"year": 2024, "value": 30e9}],
+            "operating_cash_flow": [{"year": 2024, "value": 40e9}],
+            "capex": [{"year": 2024, "value": -8e9}],
+        },
+    }
+    metrics = {
+        "metric": {
+            "grossMarginTTM": 68.5,
+            "operatingMarginTTM": 44.1,
+            "marketCapitalization": 3000000,
+            "unrelatedMetric": 999,
+        }
+    }
+    profile = {"name": "Microsoft", "finnhubIndustry": "Technology", "shareOutstanding": 7400}
+
+    ctx = build_business_model_context(
+        ticker="MSFT",
+        name="Microsoft",
+        financials=financials,
+        metrics=metrics,
+        profile=profile,
+        current_price=400.0,
+    )
+
+    assert ctx["ticker"] == "MSFT"
+    assert ctx["industry"] == "Technology"
+    assert len(ctx["revenue_history_recent"]) == 5
+    assert ctx["revenue_history_recent"][0]["year"] == 2021
+    assert ctx["margin_and_efficiency_metrics"]["grossMarginTTM"] == 68.5
+    assert ctx["margin_and_efficiency_metrics"]["operatingMarginTTM"] == 44.1
+    assert "unrelatedMetric" not in ctx["margin_and_efficiency_metrics"]
+    assert ctx["market_cap"] == pytest.approx(400.0 * 7400 * 1_000_000)
+
+
+def test_computeReportFromRaw_exposesBusinessModelFromContext(calculator):
+    raw_data = {
+        "ticker": "AMZN",
+        "profile": {"name": "Amazon.com Inc."},
+        "context": {
+            "business_model_analysis": {
+                "executive_summary": "Retail scale flywheel paired with high-margin AWS cloud.",
+                "earnings_divisions": [
+                    {"name": "North America", "revenue_share_pct": 61.0},
+                    {"name": "International", "revenue_share_pct": 22.0},
+                    {"name": "AWS", "revenue_share_pct": 17.0},
+                ],
+            }
+        },
+    }
+
+    report = compute_report_from_raw(raw_data, calculator)
+
+    bm = report["qualitative"]["business_model"]
+    assert bm["executive_summary"].startswith("Retail scale flywheel")
+    assert len(bm["earnings_divisions"]) == 3
+    assert bm["earnings_divisions"][2]["name"] == "AWS"
+
+
+def test_generateAndCacheReport_synthesizesBusinessModelAndCachesIt(calculator):
+    mock_finnhub = MagicMock()
+    mock_finnhub.get_profile.return_value = {"ticker": "AMZN", "name": "Amazon.com", "finnhubIndustry": "Retail"}
+    mock_finnhub.get_metrics.return_value = {"metric": {"grossMarginTTM": 48.0}, "series": {"annual": {}}}
+    mock_finnhub.extract_key_metrics.return_value = {
+        "latest_cash": 80e9,
+        "latest_total_debt": 60e9,
+        "history": {"revenue": [{"year": 2024, "value": 638e9}]},
+    }
+    mock_finnhub.get_quote.return_value = {"c": 200.0}
+
+    mock_ai = MagicMock()
+    mock_ai.analyze_qualitative.return_value = {"overview": "Global commerce and cloud leader."}
+    mock_ai.analyze_business_model.return_value = {
+        "executive_summary": "E-commerce + Ads + AWS.",
+        "earnings_divisions": [{"name": "AWS", "revenue_share_pct": 17.0}],
+    }
+    mock_ai.analyze_growth_company.return_value = {"cash_burn": {"verdict": "Pass", "justification": "Strong FCF."}}
+
+    mock_db = MagicMock()
+    mock_db.get_company_data.return_value = None
+
+    report = generate_and_cache_report(
+        "AMZN", mock_finnhub, calculator, mock_ai, mock_db, force_fresh=True
+    )
+
+    mock_ai.analyze_business_model.assert_called_once()
+    assert report["qualitative"]["business_model"]["executive_summary"] == "E-commerce + Ads + AWS."
+    assert "generated_at" in report["qualitative"]["business_model"]
+
+    saved_payload = mock_db.save_company_data.call_args[0][1]
+    assert "business_model_analysis" in saved_payload["context"]
+    assert saved_payload["context"]["business_model_analysis"]["earnings_divisions"][0]["name"] == "AWS"
+
 

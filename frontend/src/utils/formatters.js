@@ -64,10 +64,11 @@ export const computeValuationDelta = (intrinsicPrice, currentPrice) => {
   };
 };
 
-export const generateReportMarkdown = (report, growthAnalysis) => {
+export const generateReportMarkdown = (report, growthAnalysis, businessModelArg) => {
   if (!report) return '';
   const vals = report.financials?.valuations || {};
   const dm = report.financials?.derived_metrics || {};
+  const bm = businessModelArg || report.qualitative?.business_model;
   const mos = vals.margin_of_safety_price;
   const sticker = mos ? mos * 2 : null;
   const lines = [
@@ -91,6 +92,44 @@ export const generateReportMarkdown = (report, growthAnalysis) => {
     report.overview || 'No overview available.',
     '',
   ];
+
+  if (bm && (bm.executive_summary || bm.earnings_divisions?.length)) {
+    lines.push('## Business Model, Unit Economics & Earnings Divisions');
+    if (bm.revenue_model_archetype) {
+      lines.push(`- **Model Archetype:** ${bm.revenue_model_archetype}`);
+    }
+    if (bm.company_unit_economics?.core_economic_unit) {
+      lines.push(`- **Core Economic Unit:** ${bm.company_unit_economics.core_economic_unit}`);
+    }
+    if (bm.executive_summary) {
+      lines.push('', bm.executive_summary);
+    }
+    if (bm.how_it_makes_money?.core_mechanics) {
+      lines.push('', `**How It Makes Money:** ${bm.how_it_makes_money.core_mechanics}`);
+    }
+    if (bm.company_unit_economics?.unit_economics_summary) {
+      lines.push('', `**Unit Economics:** ${bm.company_unit_economics.unit_economics_summary}`);
+    }
+    if (Array.isArray(bm.earnings_divisions) && bm.earnings_divisions.length > 0) {
+      lines.push('', '### Earnings Reporting Divisions');
+      lines.push('| Division | Share | Revenue | YoY Growth | Margin | Monetization |');
+      lines.push('| :--- | ---: | ---: | ---: | ---: | :--- |');
+      bm.earnings_divisions.forEach((div) => {
+        const share =
+          div.revenue_share_pct !== null && div.revenue_share_pct !== undefined
+            ? `${div.revenue_share_pct}%`
+            : '—';
+        const margin =
+          div.margin_pct !== null && div.margin_pct !== undefined
+            ? `${div.margin_pct}%`
+            : '—';
+        lines.push(
+          `| ${div.name || '—'} | ${share} | ${div.latest_revenue || '—'} | ${div.yoy_growth || '—'} | ${margin} | ${div.revenue_model || '—'} |`
+        );
+      });
+    }
+    lines.push('');
+  }
 
   if (dm.growth_rates_1_3_5_10_yr) {
     lines.push('## Big 4 Growth Rates (CAGR)');

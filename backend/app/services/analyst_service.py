@@ -5,13 +5,22 @@ from typing import List, Optional, Tuple
 from google import genai
 from google.genai import types
 
-from .prompts import QUALITATIVE_ANALYSIS_PROMPT, GROWTH_COMPANY_PROMPT
+from .prompts import (
+    QUALITATIVE_ANALYSIS_PROMPT,
+    GROWTH_COMPANY_PROMPT,
+    BUSINESS_MODEL_PROMPT,
+)
 from app.core.config import settings
 
 
 class AnalystService:
     # (model_name, thinking_level) chains ordered primary -> fallbacks
     QUALITATIVE_MODELS: List[Tuple[str, str]] = [
+        ("gemini-4-hydrogen", "high"),
+        ("gemini-3.8-flash", "medium"),
+        ("gemini-3.5-flash-lite", "medium"),
+    ]
+    BUSINESS_MODEL_MODELS: List[Tuple[str, str]] = [
         ("gemini-4-hydrogen", "high"),
         ("gemini-3.8-flash", "medium"),
         ("gemini-3.5-flash-lite", "medium"),
@@ -120,3 +129,17 @@ class AnalystService:
         )
 
         return self._generate_with_retry(prompt, models_to_try=self.GROWTH_MODELS)
+
+    def analyze_business_model(self, company_name: str, context_data: dict) -> dict:
+        """
+        Prompts Gemini to generate a deep-dive business model, unit economics, and earnings division breakdown.
+        """
+        if not self.client:
+            return {"error": "AI Studio not initialized."}
+
+        prompt = BUSINESS_MODEL_PROMPT.format(
+            company_name=company_name,
+            context_data=json.dumps(context_data)
+        )
+
+        return self._generate_with_retry(prompt, models_to_try=self.BUSINESS_MODEL_MODELS)

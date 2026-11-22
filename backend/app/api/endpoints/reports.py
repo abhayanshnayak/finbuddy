@@ -1,10 +1,68 @@
+from datetime import datetime
+import pytz
 from fastapi import APIRouter, HTTPException
-from typing import List
 
 from app.dependencies import db_service as db, finnhub_client as finnhub, calc_service as calc, ai_service as ai
-from app.services.report_service import compute_report_from_raw, generate_and_cache_report, build_growth_analysis_context
+from app.services.report_service import (
+    compute_report_from_raw,
+    generate_and_cache_report,
+    build_growth_analysis_context,
+    build_business_model_context,
+)
 
 router = APIRouter()
+
+@router.get("/stocks/{ticker}/business-model")
+async def get_business_model_analysis(ticker: str, force_fresh: bool = False):
+    """
+    Fetches the business model, unit economics, and earnings divisions breakdown from the database.
+    If not found or force_fresh is true, synthesizes it via Gemini, caches it in Firestore, and returns it.
+    """
+    ticker = ticker.upper()
+    try:
+        company_data = db.get_company_data(ticker) or {}
+        context = company_data.get("context") or {}
+        business_model = context.get("business_model_analysis")
+
+        if (
+            business_model
+            and isinstance(business_model, dict)
+            and "error" not in business_model
+            and not force_fresh
+        ):
+            return business_model
+
+        if not company_data:
+            raise HTTPException(
+                status_code=400,
+                detail="No company data available for this ticker to analyze.",
+            )
+
+        context_data = build_business_model_context(
+            ticker=ticker,
+            name=company_data.get("name", ticker),
+            financials=company_data.get("financials", {}),
+            metrics=company_data.get("metrics", {}),
+            profile=company_data.get("profile", {}),
+            current_price=company_data.get("price_at_storage", 0.0),
+        )
+
+        analysis_result = ai.analyze_business_model(company_data.get("name", ticker), context_data)
+
+        if "error" in analysis_result:
+            raise HTTPException(status_code=500, detail=analysis_result["error"])
+
+        analysis_result["generated_at"] = datetime.now(pytz.utc).isoformat()
+        db.update_company_field(ticker, "business_model_analysis", analysis_result)
+
+        return analysis_result
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error in get_business_model_analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/stocks/{ticker}/growth-analysis")
 async def get_growth_analysis(ticker: str, force_fresh: bool = False):
