@@ -3,6 +3,22 @@ import json
 from unittest.mock import MagicMock
 from app.services.analyst_service import AnalystService
 
+
+def _extract_thinking_level(config):
+    if getattr(config, "thinking_config", None) is not None:
+        level = getattr(config.thinking_config, "thinking_level", None)
+        if level is not None:
+            return level
+    if getattr(config, "http_options", None) is not None and config.http_options.extra_body:
+        return (
+            config.http_options.extra_body
+            .get("generationConfig", {})
+            .get("thinkingConfig", {})
+            .get("thinkingLevel")
+        )
+    return None
+
+
 @pytest.fixture
 def mocker_genai_client(mocker):
     # Mock the genai.Client so it doesn't make real network calls
@@ -29,6 +45,10 @@ def test_analyzeQualitativeValidResponse_returnsParsedDict(service, mocker_genai
 
     assert result == {"strengths": ["Strong brand"], "weaknesses": ["High debt"]}
     mocker_genai_client.models.generate_content.assert_called_once()
+    call_kwargs = mocker_genai_client.models.generate_content.call_args.kwargs
+    assert call_kwargs["model"] == "gemini-4-hydrogen"
+    assert call_kwargs["config"].response_mime_type == "application/json"
+    assert _extract_thinking_level(call_kwargs["config"]) == "high"
 
 def test_analyzeGrowthCompanyValidResponse_returnsParsedDict(service, mocker_genai_client):
     # Setup mock response without markdown wrappers
@@ -43,6 +63,10 @@ def test_analyzeGrowthCompanyValidResponse_returnsParsedDict(service, mocker_gen
 
     assert result == {"cash_burn": "High", "path_to_profitability": "Clear"}
     mocker_genai_client.models.generate_content.assert_called_once()
+    call_kwargs = mocker_genai_client.models.generate_content.call_args.kwargs
+    assert call_kwargs["model"] == "gemini-3.5-flash-lite"
+    assert call_kwargs["config"].response_mime_type == "application/json"
+    assert _extract_thinking_level(call_kwargs["config"]) == "medium"
 
 def test_generateWithRetryAllModelsFail_returnsErrorDict(service, mocker_genai_client):
     # Make the generate_content raise an exception every time it's called
@@ -53,3 +77,43 @@ def test_generateWithRetryAllModelsFail_returnsErrorDict(service, mocker_genai_c
     assert "error" in result
     assert "AI Studio Generation Failed" in result["error"]
     assert mocker_genai_client.models.generate_content.call_count == 3  # Tried all 3 models
+    called_models = [
+        (call.kwargs["model"], _extract_thinking_level(call.kwargs["config"]))
+        for call in mocker_genai_client.models.generate_content.call_args_list
+    ]
+    assert called_models == [
+        ("gemini-4-hydrogen", "high"),
+        ("gemini-3.8-flash", "medium"),
+        ("gemini-3.5-flash-lite", "medium"),
+    ]
+
+def test_analyzeGrowthCompanyFallbackOrder_triesAllModels(service, mocker_genai_client):
+    mocker_genai_client.models.generate_content.side_effect = Exception("API Down")
+
+    result = service.analyze_growth_company("Uber", {})
+
+    assert "error" in result
+    called_models = [
+        (call.kwargs["model"], _extract_thinking_level(call.kwargs["config"]))
+        for call in mocker_genai_client.models.generate_content.call_args_list
+    ]
+    assert called_models == [
+        ("gemini-3.5-flash-lite", "medium"),
+        ("gemini-3.8-flash", "medium"),
+        ("gemini-4-hydrogen", "high"),
+    ]
+
+def test_generateWithRetry_recoversOnFallbackModel(service, mocker_genai_client):
+    mock_response = MagicMock()
+    mock_response.text = '{"overview": "Recovered"}'
+    mocker_genai_client.models.generate_content.side_effect = [
+        Exception("Primary overloaded"),
+        mock_response,
+    ]
+
+    result = service.analyze_qualitative("Apple", {}, {})
+
+    assert result == {"overview": "Recovered"}
+    assert mocker_genai_client.models.generate_content.call_count == 2
+    assert mocker_genai_client.models.generate_content.call_args_list[0].kwargs["model"] == "gemini-4-hydrogen"
+    assert mocker_genai_client.models.generate_content.call_args_list[1].kwargs["model"] == "gemini-3.8-flash"
