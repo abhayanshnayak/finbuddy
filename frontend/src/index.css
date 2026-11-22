@@ -2,8 +2,172 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --bg-canvas-rgb: 248 250 252;
+  --bg-surface-rgb: 255 255 255;
+  --bg-subtle-rgb: 241 245 249;
+  --border-subtle-rgb: 226 232 240;
+  --border-strong-rgb: 203 213 225;
+  --text-primary-rgb: 15 23 42;
+  --text-secondary-rgb: 51 65 85;
+  --text-muted-rgb: 100 116 139;
+  --accent-primary-rgb: 29 78 216;
+  --accent-primary-hover-rgb: 30 64 175;
+
+  --bg-canvas: rgb(var(--bg-canvas-rgb));
+  --bg-surface: rgb(var(--bg-surface-rgb));
+  --bg-subtle: rgb(var(--bg-subtle-rgb));
+  --border-subtle: rgb(var(--border-subtle-rgb));
+  --border-strong: rgb(var(--border-strong-rgb));
+  --text-primary: rgb(var(--text-primary-rgb));
+  --text-secondary: rgb(var(--text-secondary-rgb));
+  --text-muted: rgb(var(--text-muted-rgb));
+  --accent-primary: rgb(var(--accent-primary-rgb));
+  --accent-soft: #eff6ff;
+  --chart-grid: #e2e8f0;
+  --chart-axis: #64748b;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg-canvas-rgb: 11 17 32;
+  --bg-surface-rgb: 17 24 39;
+  --bg-subtle-rgb: 30 41 59;
+  --border-subtle-rgb: 31 41 55;
+  --border-strong-rgb: 51 65 85;
+  --text-primary-rgb: 248 250 252;
+  --text-secondary-rgb: 203 213 225;
+  --text-muted-rgb: 148 163 184;
+  --accent-primary-rgb: 59 130 246;
+  --accent-primary-hover-rgb: 96 165 250;
+
+  --bg-canvas: rgb(var(--bg-canvas-rgb));
+  --bg-surface: rgb(var(--bg-surface-rgb));
+  --bg-subtle: rgb(var(--bg-subtle-rgb));
+  --border-subtle: rgb(var(--border-subtle-rgb));
+  --border-strong: rgb(var(--border-strong-rgb));
+  --text-primary: rgb(var(--text-primary-rgb));
+  --text-secondary: rgb(var(--text-secondary-rgb));
+  --text-muted: rgb(var(--text-muted-rgb));
+  --accent-primary: rgb(var(--accent-primary-rgb));
+  --accent-soft: rgba(59, 130, 246, 0.14);
+  --chart-grid: #1e293b;
+  --chart-axis: #94a3b8;
+}
+
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 font-sans antialiased;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* Container queries for responsive KPI/Valuation panels */
+.cq-card {
+  container-type: inline-size;
+}
+
+/* Numeric alignment across financial tables and KPIs */
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Subtle enterprise scrollbars */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 9999px;
+}
+
+/* Native popover reset for InfoTooltip */
+[popover].sc-popover {
+  margin: 0;
+  inset: auto;
+  overflow: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Institutional Print / PDF Export Stylesheet */
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0.5in;
+  }
+
+  :root,
+  .dark {
+    --bg-canvas-rgb: 255 255 255 !important;
+    --bg-surface-rgb: 255 255 255 !important;
+    --bg-subtle-rgb: 248 250 252 !important;
+    --border-subtle-rgb: 203 213 225 !important;
+    --border-strong-rgb: 148 163 184 !important;
+    --text-primary-rgb: 15 23 42 !important;
+    --text-secondary-rgb: 30 41 59 !important;
+    --text-muted-rgb: 71 85 105 !important;
+    --bg-canvas: #ffffff !important;
+    --bg-surface: #ffffff !important;
+    --bg-subtle: #f8fafc !important;
+    --border-subtle: #cbd5e1 !important;
+    --border-strong: #94a3b8 !important;
+    --text-primary: #0f172a !important;
+    --text-secondary: #1e293b !important;
+    --text-muted: #475569 !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11px !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-break-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-expand {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }

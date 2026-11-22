@@ -1,21 +1,38 @@
-import { useState, useEffect } from 'react';
-import Header from './components/Header';
-import SingleTickerTab from './components/SingleTickerTab';
-import BulkIngestionTab from './components/BulkIngestionTab';
-import TagSearchTab from './components/TagSearchTab';
-import TermsOfService from './components/TermsOfService';
+import { useState, useEffect, lazy, Suspense } from 'react';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import CompaniesProvider from './context/CompaniesProvider';
+import AppShell from './components/AppShell';
+import WorkspaceHome from './components/WorkspaceHome';
+
+const SingleTickerTab = lazy(() => import('./components/SingleTickerTab'));
+const BulkIngestionTab = lazy(() => import('./components/BulkIngestionTab'));
+const TagSearchTab = lazy(() => import('./components/TagSearchTab'));
+const TermsOfService = lazy(() => import('./components/TermsOfService'));
+
+function getInitialTheme() {
+  try {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'dark' || stored === 'light') return stored;
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+  } catch {
+    // Fallback to light
+  }
+  return 'light';
+}
+
+function RouteFallback() {
+  return (
+    <div className="space-y-4 animate-pulse py-4" aria-busy="true">
+      <div className="h-24 rounded-xl bg-surface border border-line" />
+      <div className="h-64 rounded-xl bg-surface border border-line" />
+    </div>
+  );
+}
 
 function App() {
-  const [activeTab, setActiveTab] = useState('landing');
-  const [targetTicker, setTargetTicker] = useState('');
-  const handleViewTicker = (ticker) => {
-    setTargetTicker(ticker);
-    setActiveTab('single');
-  };
-
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme') || 'light';
-  });
+  const [theme, setTheme] = useState(getInitialTheme);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -24,34 +41,35 @@ function App() {
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('theme', theme);
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      // Ignore storage errors
+    }
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
   return (
-    <div className="min-h-screen p-8 bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-300">
-      <div className="w-full flex-grow space-y-8">
-        <Header activeTab={activeTab} setActiveTab={setActiveTab} theme={theme} toggleTheme={toggleTheme} />
-        {activeTab === 'single' && <SingleTickerTab initialTicker={targetTicker} />}
-        {activeTab === 'bulk' && <BulkIngestionTab onViewTicker={handleViewTicker} />}
-        {activeTab === 'tags' && <TagSearchTab />}
-        {activeTab === 'tos' && <TermsOfService />}
-      </div>
-      
-      <footer className="mt-16 pb-4 text-center text-sm text-slate-400 dark:text-slate-500">
-        By using StockClue, you acknowledge and agree to our{' '}
-        <button 
-          onClick={() => setActiveTab('tos')} 
-          className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:underline font-medium transition-colors cursor-pointer"
-        >
-          Terms of Service & Disclaimer
-        </button>
-        .
-      </footer>
-    </div>
+    <HashRouter>
+      <CompaniesProvider>
+        <AppShell theme={theme} toggleTheme={toggleTheme}>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/" element={<WorkspaceHome />} />
+              <Route path="/ticker" element={<SingleTickerTab />} />
+              <Route path="/ticker/:symbol" element={<SingleTickerTab />} />
+              <Route path="/screener" element={<TagSearchTab />} />
+              <Route path="/ingest" element={<BulkIngestionTab />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </AppShell>
+      </CompaniesProvider>
+    </HashRouter>
   );
 }
 
