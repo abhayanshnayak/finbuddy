@@ -159,7 +159,32 @@ We need to cache stock symbols for the autocomplete feature, and crucially, stor
               },
               "payback_time_years": 8,
               "projected_fcf_per_year": [{"year": 1, "fcf": 123}, {"year": 2, "fcf": 137}, {"year": 8, "fcf": 272}],
-              "computation_payback_details": "Accumulated projected FCF reaches 1,500 by Year 8, which exceeds the current Market Cap."
+              "computation_payback_details": "Accumulated projected FCF reaches 1,500 by Year 8, which exceeds the current Market Cap.",
+              "owner_earnings": 94000000000,
+              "owners_value": 940000000000,
+              "owners_value_per_share": 62.67,
+              "cap_rate": 0.0418,
+              "computation_owners_value_details": {
+                "fiscal_year": "2024",
+                "net_income": 95000000000,
+                "depreciation_amortization": 11000000000,
+                "working_capital_change": -2000000000,
+                "working_capital_source": "balance_sheet",
+                "has_working_capital_data": true,
+                "capex": 12000000000,
+                "owner_earnings": 96000000000,
+                "owners_value": 960000000000,
+                "owners_value_per_share": 64.00,
+                "cap_rate": 0.0427,
+                "price_to_owner_earnings": 23.4,
+                "is_undervalued": false,
+                "steps": {
+                  "step_1_owner_earnings": "Net Income ($95.00B) + D&A ($11.00B) - ΔWC (-$2.00B) - CapEx ($12.00B) = Owner Earnings ($96.00B)",
+                  "step_2_owners_value": "Owner Earnings ($96.00B) × 10 (10% Cap Rate) = Owner's Value ($960.00B)",
+                  "step_3_per_share": "Owner's Value ($960.00B) / Shares Outstanding (15.00B) = $64.00 / share",
+                  "step_4_cap_rate": "Owner Earnings ($96.00B) / Market Cap ($2.25T) = 4.27% Cap Rate (23.4x Owner Earnings)"
+                }
+              }
             }
             ```
 

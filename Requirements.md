@@ -80,6 +80,11 @@ The app must compute and clearly present pricing models to help the investor und
   - **Step 2 (Future Share Price):** Future EPS × Windage PE Ratio
   - **Step 3 (Sticker Price / Fair Value):** Future Share Price / (1.15)¹⁰
   - **Step 4 (Buy Price with MOS):** Sticker Price / 2
+- **Owner's Value (10-Cap Method):** Values the business at a 10% capitalization rate (10× Buffett Owner Earnings) assuming zero growth. All inputs and step-by-step math must be shown.
+  - **Step 1 (Owner Earnings):** Net Income + Depreciation & Amortization − ΔWorking Capital − |CapEx| (where ΔWorking Capital is the YoY change in Non-Cash Working Capital from Balance Sheet XBRL, falling back to Cash Flow XBRL operating capital change)
+  - **Step 2 (Owner's Value / 10-Cap):** Owner Earnings × 10
+  - **Step 3 (Owner's Value Per Share):** Owner's Value / Shares Outstanding
+  - **Step 4 (Current Cap Rate):** Owner Earnings / Market Cap (≥ 10% indicates trading at or below Owner's Value)
 
 #### E. Avoiding Confirmation Bias Checklist
 A checklist customized to the company evaluating:

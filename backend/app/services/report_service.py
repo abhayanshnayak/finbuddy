@@ -51,6 +51,7 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     latest_eps = metrics.get("metric", {}).get("epsBasicExclExtraItemsTTM", 0.0)
     shares_out = profile.get("shareOutstanding", 0) * 1000000
     market_cap = current_price * shares_out if shares_out else metrics.get("metric", {}).get("marketCapitalization", 0) * 1000000
+    effective_shares = shares_out if shares_out > 0 else (market_cap / current_price if current_price > 0 and market_cap > 0 else 0.0)
 
     growth_rates = {
         "revenue": list(calc.calculate_growth_rates(history.get("revenue", [])).values()),
@@ -69,10 +70,15 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
         fcf_val = ocf_val - abs(capex_val)
         fcf_history.append({"year": year, "value": fcf_val})
 
-    windage_gr, windage_rationale, computation_windage_details = calc.calculate_windage_growth_rate(ocf_list)
-    
+    raw_windage_gr, windage_rationale, computation_windage_details = calc.calculate_windage_growth_rate(ocf_list)
+    historical_label = (
+        f"{computation_windage_details.get('years')}Y OCF CAGR"
+        if computation_windage_details.get("years")
+        else "Historical OCF CAGR"
+    )
+
     windage_fallback_message = None
-    if windage_gr < 0:
+    if raw_windage_gr < 0:
         # OCF CAGR was negative or undefined — fall back to Net Income CAGR.
         # Try progressively shorter windows (10yr → 5yr → 3yr → 1yr) since
         # companies like Uber may have had negative NI in earlier years too.
@@ -85,20 +91,81 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
                 ni_cagr = ni_rates[idx]
                 chosen_label = window_labels[idx]
                 break
-        windage_gr = ni_cagr
+        raw_windage_gr = ni_cagr
         if chosen_label:
-            windage_rationale = f"Windage growth rate was negative, so the {chosen_label} Net Income growth rate ({windage_gr:.2%}) was used instead."
+            historical_label = f"{chosen_label.capitalize()} Net Income CAGR (Fallback)"
+            windage_rationale = f"Windage growth rate was negative, so the {chosen_label} Net Income growth rate ({raw_windage_gr:.2%}) was used instead."
             windage_fallback_message = f"The {chosen_label} Net Income growth rate was used for the windage growth."
         else:
+            historical_label = "No Positive Historical Growth"
             windage_rationale = f"Windage growth rate was negative and no positive Net Income growth rate was available. Defaulting to 0%."
             windage_fallback_message = "No positive growth rate was available from either OCF or Net Income history."
         computation_windage_details = {
             "steps": [],
-            "stats": {"mean": windage_gr, "stdev": 0.0, "lower_bound": windage_gr, "upper_bound": windage_gr, "is_filtered": False},
-            "final_rate": windage_gr
-        }    
-    latest_net_income = history["net_income"][-1]["value"] if history.get("net_income") else 0
-    latest_da = history["da"][-1]["value"] if history.get("da") else 0
+            "stats": {"mean": raw_windage_gr, "stdev": 0.0, "lower_bound": raw_windage_gr, "upper_bound": raw_windage_gr, "is_filtered": False},
+            "final_rate": raw_windage_gr
+        }
+
+    # Combined Method: Anchor Year-1 growth (OCF vs Forward Consensus vs Revenue+5% vs 40% cap)
+    # and linearly decay toward 12% terminal rate over 10 years when starting growth > 12%.
+    metric_dict = metrics.get("metric", {})
+    rev_list = history.get("revenue", [])
+    rev_cagr, rev_years, rev_start_yr, rev_end_yr = calc.calculate_longest_cagr(rev_list, max_years=10)
+
+    growth_projection = calc.calculate_combined_growth_projection(
+        historical_gr=raw_windage_gr,
+        historical_label=historical_label,
+        forward_pe=metric_dict.get("forwardPE"),
+        forward_peg=metric_dict.get("forwardPEG"),
+        revenue_cagr=rev_cagr,
+        revenue_years=rev_years,
+        revenue_start_year=rev_start_yr,
+        revenue_end_year=rev_end_yr,
+    )
+    windage_gr = growth_projection["effective_cagr"]
+    yearly_growth_rates = [item["rate"] for item in growth_projection["yearly_schedule"]]
+    computation_windage_details["raw_historical_rate"] = growth_projection["raw_historical_rate"]
+    computation_windage_details["final_rate"] = windage_gr
+    computation_windage_details["projection"] = growth_projection
+    if growth_projection["was_anchored"] or growth_projection["decay_applied"]:
+        windage_rationale = f"{windage_rationale} Combined adjustment: {growth_projection['adjustment_summary']}"
+
+    ni_list = history.get("net_income", [])
+    da_list = history.get("da", [])
+    wc_change_list = history.get("working_capital_change", [])
+    da_by_year = {item["year"]: item["value"] for item in da_list if "year" in item}
+    capex_by_year = {item["year"]: item["value"] for item in capex_list if "year" in item}
+    wc_change_by_year = {item["year"]: item for item in wc_change_list if "year" in item}
+
+    owner_earnings_history = []
+    for ni_item in ni_list:
+        yr = ni_item.get("year")
+        ni_v = ni_item.get("value", 0.0)
+        da_v = da_by_year.get(yr, 0.0)
+        wc_entry = wc_change_by_year.get(yr)
+        wc_v = wc_entry.get("value", 0.0) if wc_entry else 0.0
+        wc_src = wc_entry.get("source", "balance_sheet") if wc_entry else "unavailable"
+        capex_v = abs(capex_by_year.get(yr, 0.0))
+        oe_v = ni_v + da_v - wc_v - capex_v
+        owner_earnings_history.append({
+            "year": yr,
+            "net_income": ni_v,
+            "da": da_v,
+            "working_capital_change": wc_v,
+            "working_capital_source": wc_src,
+            "capex": capex_v,
+            "owner_earnings": oe_v,
+            "owners_value": oe_v * 10 if oe_v > 0 else 0.0
+        })
+
+    latest_ni_item = ni_list[-1] if ni_list else None
+    latest_net_income = latest_ni_item["value"] if latest_ni_item else 0
+    latest_oe_year = latest_ni_item["year"] if latest_ni_item else "TTM"
+    latest_da = da_by_year.get(latest_oe_year, da_list[-1]["value"] if da_list else 0) if latest_ni_item else (da_list[-1]["value"] if da_list else 0)
+    latest_capex_for_oe = capex_by_year.get(latest_oe_year, capex_list[-1]["value"] if capex_list else 0) if latest_ni_item else (capex_list[-1]["value"] if capex_list else 0)
+    latest_wc_entry = wc_change_by_year.get(latest_oe_year) if latest_ni_item else (wc_change_list[-1] if wc_change_list else None)
+    latest_wc_change = latest_wc_entry.get("value", 0.0) if latest_wc_entry else 0.0
+    latest_wc_source = latest_wc_entry.get("source", "balance_sheet") if latest_wc_entry else "unavailable"
     latest_capex = capex_list[-1]["value"] if capex_list else 0
     latest_fcf = ocf_list[-1]["value"] - abs(latest_capex) if ocf_list else 0
     latest_fcf_year = ocf_list[-1]["year"] if ocf_list else "TTM"
@@ -106,38 +173,18 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     series_annual = metrics.get("series", {}).get("annual", {})
     roe_history = list(reversed(series_annual.get("roe", [])))
     roic_history = list(reversed(series_annual.get("roic", [])))
-    
+
     pe_history = series_annual.get("pe", [])
-    sorted_pe = sorted(pe_history, key=lambda x: x.get("period", ""), reverse=True)
-    last_5_pe_records = sorted_pe[:5]
-    last_5_pe_values = [x.get("v", 15.0) for x in last_5_pe_records if x.get("v") is not None]
-    
-    if last_5_pe_values:
-        max_pe_5yr = max(last_5_pe_values)
-    else:
-        pe_excl_extra = metrics.get("metric", {}).get("peExclExtraTTM")
-        max_pe_5yr = pe_excl_extra if pe_excl_extra is not None else 15.0
-        
-    windage_pe = min(max_pe_5yr, windage_gr * 100 * 2)
-    
-    computation_pe_details = {
-        "last_5_years_pe": [
-            {
-                "date": x.get("period", ""),
-                "pe": x.get("v", 0.0)
-            }
-            for x in last_5_pe_records
-        ],
-        "max_pe_5yr": max_pe_5yr,
-        "two_x_growth": windage_gr * 100 * 2,
-        "final_pe": windage_pe
-    }
-    
+    windage_pe, computation_pe_details = calc.calculate_conservative_exit_pe(
+        pe_history_records=pe_history,
+        terminal_gr=growth_projection["terminal_rate"],
+        fallback_pe_ttm=metric_dict.get("peExclExtraTTM"),
+    )
+
     roe_averages = calc.calculate_averages(roe_history)
     roic_averages = calc.calculate_averages(roic_history)
 
     # Rule of 40 and EV/Revenue
-    rev_list = history.get("revenue", [])
     if len(rev_list) >= 2 and rev_list[-2]["value"] > 0:
         latest_revenue = rev_list[-1]["value"]
         latest_revenue_year = rev_list[-1]["year"]
@@ -156,9 +203,34 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     enterprise_value = market_cap + total_debt - cash_and_equivalents
     ev_to_revenue = enterprise_value / latest_revenue if latest_revenue > 0 else 0.0
 
-    owner_earnings, cap_rate, cap_rationale = calc.calculate_10_cap(latest_net_income, latest_da, latest_capex, market_cap)
-    payback_years, projected_fcf, payback_rationale = calc.calculate_payback_time(latest_fcf, windage_gr, market_cap, str(latest_fcf_year))
-    mos_price, mos_details = calc.calculate_margin_of_safety(latest_eps, windage_gr, windage_pe)
+    owner_earnings, cap_rate, cap_rationale, owners_value_details = calc.calculate_10_cap(
+        latest_net_income,
+        latest_da,
+        latest_capex_for_oe,
+        market_cap,
+        shares_outstanding=effective_shares,
+        fiscal_year=str(latest_oe_year),
+        working_capital_change=latest_wc_change,
+        working_capital_source=latest_wc_source,
+    )
+    owners_value_details["history"] = owner_earnings_history[-10:]
+    payback_years, projected_fcf, payback_rationale = calc.calculate_payback_time(
+        latest_fcf,
+        windage_gr,
+        market_cap,
+        str(latest_fcf_year),
+        yearly_growth_rates=yearly_growth_rates,
+        growth_projection=growth_projection,
+    )
+    mos_price, mos_details = calc.calculate_margin_of_safety(
+        latest_eps,
+        windage_gr,
+        windage_pe,
+        yearly_growth_rates=yearly_growth_rates,
+        growth_projection=growth_projection,
+        pe_details=computation_pe_details,
+        shares_outstanding=effective_shares,
+    )
 
     return {
         "ticker": ticker,
@@ -186,6 +258,7 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
             "derived_metrics": {
                 "growth_rates_1_3_5_10_yr": growth_rates,
                 "computation_growth_rates": "Calculated using CAGR formula (Ending Value / Beginning Value)^(1/Years) - 1.",
+                "raw_windage_growth_rate": growth_projection["raw_historical_rate"],
                 "windage_growth_rate": windage_gr,
                 "computation_windage": windage_rationale,
                 "computation_windage_details": computation_windage_details,
@@ -210,18 +283,25 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
             },
             "valuations": {
                 "margin_of_safety_price": mos_price,
+                "windage_raw_growth_rate": growth_projection["raw_historical_rate"],
+                "windage_start_growth_rate": growth_projection["start_rate"],
+                "windage_terminal_growth_rate": growth_projection["terminal_rate"],
                 "windage_growth_rate_used": windage_gr,
                 "windage_pe_used": windage_pe,
                 "marr_used": 0.15,
                 "computation_mos_details": mos_details,
                 "computation_pe_details": computation_pe_details,
                 "computation_windage_details": computation_windage_details,
+                "computation_growth_projection": growth_projection,
                 "payback_time_years": payback_years,
                 "projected_fcf_per_year": projected_fcf,
                 "computation_payback_details": payback_rationale,
                 "owner_earnings": owner_earnings,
+                "owners_value": owners_value_details["owners_value"],
+                "owners_value_per_share": owners_value_details["owners_value_per_share"],
                 "cap_rate": cap_rate,
                 "computation_10_cap": cap_rationale,
+                "computation_owners_value_details": owners_value_details,
                 "market_cap": market_cap,
                 "windage_fallback_message": windage_fallback_message
             }
