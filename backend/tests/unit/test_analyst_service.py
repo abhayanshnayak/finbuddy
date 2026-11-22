@@ -117,3 +117,19 @@ def test_generateWithRetry_recoversOnFallbackModel(service, mocker_genai_client)
     assert mocker_genai_client.models.generate_content.call_count == 2
     assert mocker_genai_client.models.generate_content.call_args_list[0].kwargs["model"] == "gemini-4-hydrogen"
     assert mocker_genai_client.models.generate_content.call_args_list[1].kwargs["model"] == "gemini-3.8-flash"
+
+def test_analyzeQualitativePrompt_includesExhaustiveCompetitorFields(service, mocker_genai_client):
+    mock_response = MagicMock()
+    mock_response.text = '{"competitors": {"market_structure_verdict": {"quadrant": "Clear Moat in a Growing Pie"}, "competitor_list": []}}'
+    mocker_genai_client.models.generate_content.return_value = mock_response
+
+    service.analyze_qualitative("NVIDIA", {"name": "NVIDIA Corp"}, {"pe": 45.0})
+
+    sent_prompt = mocker_genai_client.models.generate_content.call_args.kwargs["contents"]
+    assert "NVIDIA" in sent_prompt
+    assert "market_structure_verdict" in sent_prompt
+    assert "Clear Moat in a Growing Pie" in sent_prompt
+    assert "Fixed-Size Market with Little Moat" in sent_prompt
+    assert "how_they_compete" in sent_prompt
+    assert "moat_comparison" in sent_prompt
+    assert "competitive_dynamics_summary" in sent_prompt

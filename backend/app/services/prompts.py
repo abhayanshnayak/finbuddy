@@ -4,7 +4,13 @@ QUALITATIVE_ANALYSIS_PROMPT = """
         Profile Data: {profile}
         Metrics Data: {metrics}
 
-        Please conduct an exceptionally thorough, deep-dive qualitative analysis of the company, focusing specifically on their growth strategy, competitive moats, and operational/strategic challenges, integrating highly specific insights from their recent 10-K filings. Avoid generic high-level summaries; provide rich, professional-grade equity research paragraphs.
+        Please conduct an exceptionally thorough, deep-dive qualitative analysis of the company, focusing specifically on their growth strategy, competitive landscape & market structure, competitive moats, and operational/strategic challenges, integrating highly specific insights from their recent Form 10-K filings (Item 1 Business & Competition, Item 1A Risk Factors, Item 7 MD&A), competitor 10-K filings, earnings call disclosures, and authoritative industry/market research sources. Avoid generic high-level summaries; provide rich, institutional-grade equity research with concrete products, segments, pricing dynamics, market share figures, and unit-economics comparisons.
+
+        For the competitor analysis specifically:
+        - Identify 4 to 6 of the most important direct and emerging competitors (including major rivals explicitly named in the company's 10-K Competition / Risk Factors sections as well as notable private, international, or Big Tech disruptors).
+        - Clearly explain WHERE and HOW each competitor competes (pricing/bundling, distribution, R&D cadence, vertical integration, switching-cost attacks, scale/capex).
+        - Provide a concrete head-to-head comparison of how {company_name}'s moat compares against each competitor's moat (switching costs, network effects, cost advantage, brand/IP, ecosystem lock-in, and margin/ROIC gaps).
+        - Deliver an unambiguous, candid verdict on market structure: clearly establish whether {company_name} operates in a fixed-size, zero-sum market with little moat OR holds a clear, defensible moat inside a growing pie (expanding TAM).
         
         Using your internal knowledge of the NAICS (North American Industry Classification System) taxonomy, classify the company into its most accurate Sector (2-digit level), Subsector (3-digit level), and Industry Group (4-digit level).
 
@@ -20,20 +26,45 @@ QUALITATIVE_ANALYSIS_PROMPT = """
                 "key_initiatives": [
                     "A highly specific key initiative from the 10-K detailing R&D directions, production capacity expansion, infrastructure upgrades, or new market/geographic entries.",
                     "Another highly detailed key initiative from the 10-K showing exactly how capital is allocated for future growth."
-                ] 
+                ]
             }},
-            "competitors": {{ "competitor_list": [ {{"name": "...", "competition_scope": "..."}} ] }},
+            "competitors": {{
+                "market_structure_verdict": {{
+                    "quadrant": "Choose exactly one: Clear Moat in a Growing Pie | Clear Moat in a Mature/Fixed Pie | Narrow/Weak Moat in a Growing Pie | Fixed-Size Market with Little Moat",
+                    "market_growth_outlook": "Choose the closest fit: Expanding Pie (Secular Growth) | Moderate / GDP-Level Growth | Mature / Fixed-Size (Zero-Sum) | Structurally Declining",
+                    "moat_position": "Choose the closest fit: Wide / Dominant | Narrow / Defensible | Weak / Commoditized",
+                    "industry_concentration": "Concise structural label with context (e.g., 'Oligopoly — top 3 control ~70% share', 'Duopoly', 'Fragmented', 'Winner-Take-Most')",
+                    "tam_and_pie_dynamics": "Detailed, 10-K and industry-sourced analysis of total addressable market (TAM) size, estimated secular growth rate (CAGR), structural tailwinds/headwinds, and whether competitors are growing alongside an expanding pie or fighting a zero-sum price war over a fixed customer base.",
+                    "verdict_rationale": "Decisive, multi-sentence investor verdict answering directly whether this is a fixed-size market with little moat or a clear moat in a growing pie — backed by concrete evidence on pricing power, gross/operating margin resilience, market share trajectory, and ROIC vs. peers."
+                }},
+                "competitor_list": [
+                    {{
+                        "name": "Competitor Name (Ticker if public, or Private)",
+                        "threat_level": "High | Medium | Low",
+                        "competition_scope": "Specific product lines, customer segments, geographies, and revenue streams where this competitor overlaps with {company_name}, citing 10-K Item 1 / Competition details.",
+                        "how_they_compete": "Concrete competitive playbook: pricing or discounting/bundling tactics, distribution channels, R&D and product velocity, vertical integration, ecosystem leverage, or capital intensity.",
+                        "estimated_market_share_and_scale": "Relative scale (revenue/user footprint), estimated market share in overlapping segments, and directional share trend (gaining, holding, or losing share) vs. {company_name}.",
+                        "moat_comparison": "Head-to-head comparison of {company_name}'s economic moat versus this competitor's moat across switching costs, network effects, cost advantages, IP/brand, and margin or ROIC gap.",
+                        "key_advantage_over_target": "Where this competitor is genuinely stronger or poses the most credible threat to {company_name}'s growth, pricing power, or margins.",
+                        "target_advantage_over_competitor": "Where {company_name} clearly outperforms this competitor and why that advantage is durable (or at risk)."
+                    }}
+                ],
+                "competitive_dynamics_summary": "Exhaustive multi-paragraph equity-research synthesis covering industry structure, barriers to entry, customer switching costs, threat of substitutes and new entrants (including Big Tech, AI/technological disruption, or regulatory shifts cited in 10-K Item 1A Risk Factors), supplier/buyer bargaining power, and long-term margin durability across the competitive set.",
+                "sources_referenced": [
+                    "Specific 10-K filing sections (e.g., '{company_name} FY2025 Form 10-K, Item 1 Competition & Item 1A Risk Factors'), competitor 10-K filings, earnings disclosures, or industry reports informing this competitive analysis."
+                ]
+            }},
             "risks": {{ 
                 "key_risks": [ 
                     {{"risk": "Highly specific operational/regulatory risk", "explanation": "A thorough, detailed explanation of how this risk affects cash flows, margins, or terminal value based on the 10-K Item 1A Risk Factors."}},
                     {{"risk": "Competitive or macroeconomic threat", "explanation": "A thorough, detailed explanation of this challenge based on the 10-K."}}
-                ] 
+                ]
             }},
             "moats": {{
                 "moat_types": [ 
                     {{"type": "Moat Category (e.g. Switching Costs, Network Effects, Cost Advantage, Intangible Assets)", "strength": "Wide or Narrow", "rationale": "A deep, thorough value-investor's explanation of how this moat works, its durability, how it presents itself in the company's return metrics (ROIC/ROE), and specific barriers to entry for competitors."}}
                 ],
-                "competitor_comparison": "An extremely detailed, comparative analysis of competitive dynamics, detailing specific unit economics, pricing power, distribution channels, and market shares relative to key competitors."
+                "competitor_comparison": "An extremely detailed, comparative synthesis of unit economics, pricing power, gross/operating margin structure, distribution channels, and capital efficiency relative to the peer group."
             }},
             "management": {{
                 "ceo_tenure_years": 0,

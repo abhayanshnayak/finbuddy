@@ -54,7 +54,24 @@ def test_computeReportFromRawValidData_computesDerivedMetricsSuccessfully(calcul
         "ai_analysis": {
             "overview": "Strong company.",
             "sector": "Tech",
-            "management": {"quality": "high"}
+            "management": {"quality": "high"},
+            "competitors": {
+                "market_structure_verdict": {
+                    "quadrant": "Clear Moat in a Growing Pie",
+                    "market_growth_outlook": "Expanding Pie (Secular Growth)",
+                    "moat_position": "Wide / Dominant"
+                },
+                "competitor_list": [
+                    {
+                        "name": "Samsung Electronics",
+                        "threat_level": "High",
+                        "competition_scope": "Premium smartphones and wearables",
+                        "how_they_compete": "Hardware breadth and vertical component integration",
+                        "moat_comparison": "Apple ecosystem lock-in vs Samsung hardware scale"
+                    }
+                ],
+                "competitive_dynamics_summary": "High switching costs sustain premium margins."
+            }
         },
         "price_at_storage": 150.0,
         "last_updated_pst": "2023-10-01 10:00am"
@@ -66,6 +83,9 @@ def test_computeReportFromRawValidData_computesDerivedMetricsSuccessfully(calcul
     assert report["name"] == "Apple Inc."
     assert "derived_metrics" in report["financials"]
     assert "valuations" in report["financials"]
+    assert report["qualitative"]["competitors"]["market_structure_verdict"]["quadrant"] == "Clear Moat in a Growing Pie"
+    assert len(report["qualitative"]["competitors"]["competitor_list"]) == 1
+    assert report["qualitative"]["competitors"]["competitor_list"][0]["name"] == "Samsung Electronics"
     
     # Check that market cap was computed correctly using shares * price
     # shares_out = 15000 * 1,000,000 = 15,000,000,000

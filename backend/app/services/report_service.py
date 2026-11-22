@@ -324,9 +324,14 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
                 "industry_group": "Unknown",
                 "sources": {"economic_moat": "Unavailable", "management_integrity": "Unavailable", "growth_runway": "Unavailable"},
                 "growth_plans": {"summary": "Unavailable due to API limits", "details": []},
-                "competitors": {"summary": "Unavailable due to API limits", "list": []},
-                "risks": {"summary": "Unavailable due to API limits", "list": []},
-                "moats": {"summary": "Unavailable due to API limits", "list": []},
+                "competitors": {
+                    "market_structure_verdict": {},
+                    "competitor_list": [],
+                    "competitive_dynamics_summary": "Unavailable due to API limits",
+                    "sources_referenced": []
+                },
+                "risks": {"summary": "Unavailable due to API limits", "key_risks": []},
+                "moats": {"moat_types": [], "competitor_comparison": "Unavailable due to API limits"},
                 "management": {"summary": "Unavailable due to API limits", "integrity_score": 0},
                 "market_and_bias": {"summary": "Unavailable due to API limits"}
             }

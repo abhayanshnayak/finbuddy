@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { formatLargeNumber } from '../utils/formatters';
+import CompetitorAnalysisSection from './CompetitorAnalysisSection';
 
 export default function SingleTickerTab({ initialTicker, onBack }) {
   const [ticker, setTicker] = useState('');
@@ -993,11 +994,14 @@ export default function SingleTickerTab({ initialTicker, onBack }) {
                 <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{moat.rationale}</p>
               </div>
             ))}
-            <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-700/30 rounded-2xl border border-slate-100 dark:border-slate-600/50">
-              <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">Competitor Comparison</h4>
-              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{report.qualitative.moats?.competitor_comparison}</p>
-            </div>
           </div>
+
+          {/* Exhaustive Competitor & Market Structure Analysis */}
+          <CompetitorAnalysisSection
+            companyName={report.name}
+            competitors={report.qualitative.competitors}
+            legacyComparison={report.qualitative.moats?.competitor_comparison}
+          />
 
           {/* Bias Checklist */}
           <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 space-y-4">
