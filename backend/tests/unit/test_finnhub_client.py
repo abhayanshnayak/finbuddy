@@ -225,3 +225,177 @@ def test_extractKeyMetricsWorkingCapitalUnavailable_marksUnavailableSafely(clien
     assert metrics["history"]["working_capital_change"][0]["value"] == 0.0
     assert metrics["history"]["working_capital_change"][0]["source"] == "unavailable"
 
+
+def test_computeXbrlTtmYtdQuarterly_computesPriorFyPlusCurrYtdMinusPriorYtd(client):
+    annual_reports = [
+        {
+            "year": 2025,
+            "quarter": 0,
+            "startDate": "2025-01-01 00:00:00",
+            "endDate": "2025-12-31 00:00:00",
+            "report": {
+                "ic": [
+                    {"concept": "us-gaap_Revenues", "value": 5387000000.0},
+                    {"concept": "us-gaap_NetIncomeLoss", "value": -3646000000.0},
+                ],
+                "cf": [
+                    {"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": -779000000.0},
+                ],
+                "bs": [
+                    {"concept": "us-gaap_StockholdersEquity", "value": 4594000000.0},
+                ],
+            },
+        }
+    ]
+    quarterly_reports = [
+        {
+            "year": 2025,
+            "quarter": 3,
+            "startDate": "2025-01-01 00:00:00",
+            "endDate": "2025-09-30 00:00:00",
+            "report": {
+                "ic": [
+                    {"concept": "us-gaap_Revenues", "value": 4101000000.0},
+                    {"concept": "us-gaap_NetIncomeLoss", "value": -2835000000.0},
+                ],
+                "cf": [
+                    {"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": -98000000.0},
+                ],
+                "bs": [
+                    {"concept": "us-gaap_StockholdersEquity", "value": 5084000000.0},
+                ],
+            },
+        },
+        {
+            "year": 2026,
+            "quarter": 3,
+            "startDate": "2026-01-01 00:00:00",
+            "endDate": "2026-09-30 00:00:00",
+            "report": {
+                "ic": [
+                    {"concept": "us-gaap_Revenues", "value": 5194000000.0},
+                    {"concept": "us-gaap_NetIncomeLoss", "value": -2162000000.0},
+                ],
+                "cf": [
+                    {"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": -1948000000.0},
+                ],
+                "bs": [
+                    {"concept": "us-gaap_StockholdersEquity", "value": 5691000000.0},
+                ],
+            },
+        },
+    ]
+
+    ttm = client.compute_xbrl_ttm(annual_reports, quarterly_reports)
+
+    assert ttm["revenue"]["value"] == pytest.approx(6480000000.0)
+    assert ttm["revenue"]["period"] == "2026-09-30"
+    assert ttm["revenue"]["period_type"] == "TTM"
+    assert ttm["revenue"]["source"] == "xbrl_quarterly"
+
+    assert ttm["net_income"]["value"] == pytest.approx(-2973000000.0)
+    assert ttm["operating_cash_flow"]["value"] == pytest.approx(-2629000000.0)
+    assert ttm["book_value"]["value"] == pytest.approx(5691000000.0)
+    assert ttm["book_value"]["period_type"] == "MRQ"
+
+
+def test_computeXbrlTtmLatest10kNewerThan10q_usesAnnual10kAndOmitsMissingBs(client):
+    annual_reports = [
+        {
+            "year": 2026,
+            "quarter": 0,
+            "startDate": "2025-09-28 00:00:00",
+            "endDate": "2026-09-26 00:00:00",
+            "report": {
+                "ic": [
+                    {"concept": "us-gaap_Revenues", "value": 478834000000.0},
+                    {"concept": "us-gaap_NetIncomeLoss", "value": 132175000000.0},
+                ],
+                "cf": [
+                    {"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": 145097000000.0},
+                ],
+                "bs": [],
+            },
+        }
+    ]
+    quarterly_reports = [
+        {
+            "year": 2026,
+            "quarter": 3,
+            "startDate": "2025-09-28 00:00:00",
+            "endDate": "2026-06-27 00:00:00",
+            "report": {
+                "ic": [{"concept": "us-gaap_Revenues", "value": 364357000000.0}],
+                "cf": [],
+                "bs": [],
+            },
+        }
+    ]
+
+    ttm = client.compute_xbrl_ttm(annual_reports, quarterly_reports)
+
+    assert ttm["revenue"]["value"] == pytest.approx(478834000000.0)
+    assert ttm["revenue"]["source"] == "xbrl_annual"
+    assert ttm["revenue"]["period"] == "2026-09-26"
+    assert ttm["net_income"]["value"] == pytest.approx(132175000000.0)
+    assert ttm["operating_cash_flow"]["value"] == pytest.approx(145097000000.0)
+    assert "book_value" not in ttm
+
+
+def test_extractKeyMetricsIncludeTtmTrue_attachesQuarterlyTtmAndHandlesErrorsGracefully(client, mocker):
+    annual_resp = MagicMock()
+    annual_resp.raise_for_status = MagicMock()
+    annual_resp.json.return_value = {
+        "data": [
+            {
+                "year": 2025,
+                "quarter": 0,
+                "startDate": "2025-01-01",
+                "endDate": "2025-12-31",
+                "report": {
+                    "ic": [{"concept": "us-gaap_Revenues", "value": "1000"}],
+                    "cf": [{"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": "300"}],
+                    "bs": [{"concept": "us-gaap_StockholdersEquity", "value": "500"}],
+                },
+            }
+        ]
+    }
+    quarterly_resp = MagicMock()
+    quarterly_resp.raise_for_status = MagicMock()
+    quarterly_resp.json.return_value = {
+        "data": [
+            {
+                "year": 2025,
+                "quarter": 1,
+                "startDate": "2025-01-01",
+                "endDate": "2025-03-31",
+                "report": {
+                    "ic": [{"concept": "us-gaap_Revenues", "value": "200"}],
+                    "cf": [{"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": "50"}],
+                    "bs": [{"concept": "us-gaap_StockholdersEquity", "value": "450"}],
+                },
+            },
+            {
+                "year": 2026,
+                "quarter": 1,
+                "startDate": "2026-01-01",
+                "endDate": "2026-03-31",
+                "report": {
+                    "ic": [{"concept": "us-gaap_Revenues", "value": "260"}],
+                    "cf": [{"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": "70"}],
+                    "bs": [{"concept": "us-gaap_StockholdersEquity", "value": "560"}],
+                },
+            },
+        ]
+    }
+
+    mock_get = mocker.patch("requests.get", side_effect=[annual_resp, quarterly_resp])
+
+    result = client.extract_key_metrics("AAPL", include_ttm=True)
+    assert mock_get.call_count == 2
+    assert result["ttm"]["revenue"]["value"] == pytest.approx(1060.0)
+    assert result["ttm"]["operating_cash_flow"]["value"] == pytest.approx(320.0)
+    assert result["ttm"]["book_value"]["value"] == pytest.approx(560.0)
+    assert result["ttm"]["book_value"]["period_type"] == "MRQ"
+
+

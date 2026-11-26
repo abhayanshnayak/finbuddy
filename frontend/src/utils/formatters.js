@@ -132,13 +132,19 @@ export const generateReportMarkdown = (report, growthAnalysis, businessModelArg)
   }
 
   if (dm.growth_rates_1_3_5_10_yr) {
-    lines.push('## Big 4 Growth Rates (CAGR)');
-    lines.push('| Metric | 1Y | 3Y | 5Y | 10Y |');
-    lines.push('| :--- | ---: | ---: | ---: | ---: |');
+    const big4Ttm = report.financials?.raw_data?.big4_ttm || {};
+    lines.push('## Big 4 Growth Rates (CAGR) & TTM/MRQ');
+    lines.push('| Metric | TTM / MRQ | 1Y | 3Y | 5Y | 10Y |');
+    lines.push('| :--- | ---: | ---: | ---: | ---: | ---: |');
     Object.entries(dm.growth_rates_1_3_5_10_yr).forEach(([k, arr]) => {
       const label = k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      const ttmItem = big4Ttm[k];
+      const ttmVal =
+        ttmItem && ttmItem.value !== null && ttmItem.value !== undefined && !Number.isNaN(ttmItem.value)
+          ? `${formatSignedCurrency(ttmItem.value)} (${ttmItem.period_type || (k === 'book_value' ? 'MRQ' : 'TTM')})`
+          : '—';
       const cells = (arr || []).map((r) => formatPercent(r, 1)).join(' | ');
-      lines.push(`| ${label} | ${cells} |`);
+      lines.push(`| ${label} | ${ttmVal} | ${cells} |`);
     });
     lines.push('');
   }

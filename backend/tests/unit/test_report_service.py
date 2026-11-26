@@ -2,9 +2,12 @@ import pytest
 from unittest.mock import MagicMock
 from app.services.report_service import (
     compute_report_from_raw,
+    compute_big4_ttm,
     build_growth_analysis_context,
     build_business_model_context,
     generate_and_cache_report,
+    normalize_rating_to_5,
+    normalize_employee_sentiment,
 )
 from app.services.calculator import FinancialCalculator
 
@@ -420,5 +423,258 @@ def test_generateAndCacheReport_synthesizesBusinessModelAndCachesIt(calculator):
     saved_payload = mock_db.save_company_data.call_args[0][1]
     assert "business_model_analysis" in saved_payload["context"]
     assert saved_payload["context"]["business_model_analysis"]["earnings_divisions"][0]["name"] == "AWS"
+
+
+def test_normalizeRatingTo5_handlesAllScalesSafely():
+    assert normalize_rating_to_5(4.2) == 4.2
+    assert normalize_rating_to_5(8.4) == 4.2
+    assert normalize_rating_to_5(88) == 4.4
+    assert normalize_rating_to_5("92%") == 4.6
+    assert normalize_rating_to_5("4.1 / 5.0") == 4.1
+    assert normalize_rating_to_5(150) == 5.0
+    assert normalize_rating_to_5(0) is None
+    assert normalize_rating_to_5(-3.0) is None
+    assert normalize_rating_to_5(None) is None
+    assert normalize_rating_to_5(True) is None
+
+
+def test_computeReportFromRawLegacyOutOfScaleRatings_normalizesToFivePointScale(calculator):
+    raw_data = {
+        "ticker": "AAPL",
+        "profile": {"name": "Apple Inc."},
+        "ai_analysis": {
+            "management": {
+                "ceo_tenure_years": 14,
+                "ceo_employee_rating": 88.0,
+                "employee_happiness_score": 76.0,
+                "board_of_directors_summary": "Independent board.",
+            }
+        },
+    }
+
+    report = compute_report_from_raw(raw_data, calculator)
+    mgmt = report["qualitative"]["management"]
+
+    assert mgmt["ceo_employee_rating"] == 4.4
+    assert mgmt["ceo_approval_pct"] == 88
+    assert mgmt["employee_happiness_score"] == 3.8
+    assert mgmt["sentiment_grounded"] is False
+
+
+def test_computeReportFromRawGroundedSentiment_prefersGroundedRatingsAndSources(calculator):
+    raw_data = {
+        "ticker": "MSFT",
+        "profile": {"name": "Microsoft Corp"},
+        "ai_analysis": {
+            "management": {
+                "ceo_tenure_years": 10,
+                "ceo_employee_rating": 95.0,
+                "employee_happiness_score": 82.0,
+            }
+        },
+        "context": {
+            "employee_sentiment": {
+                "ceo_name": "Satya Nadella",
+                "ceo_tenure_years": 12,
+                "ceo_approval_pct": 92,
+                "ceo_employee_rating": 92,  # Deliberately out of scale to verify normalization
+                "employee_happiness_score": 4.3,
+                "review_count": "60,000+ reviews",
+                "source_platform": "Glassdoor",
+                "notes": "Glassdoor shows 4.3/5 overall and 92% CEO approval.",
+                "grounding_sources": [
+                    {"title": "Glassdoor", "url": "https://www.glassdoor.com/microsoft"}
+                ],
+                "grounded": True,
+                "generated_at": "2026-11-22T20:00:00+00:00",
+            }
+        },
+    }
+
+    report = compute_report_from_raw(raw_data, calculator)
+    mgmt = report["qualitative"]["management"]
+
+    assert mgmt["ceo_name"] == "Satya Nadella"
+    assert mgmt["ceo_tenure_years"] == 12
+    assert mgmt["ceo_approval_pct"] == 92
+    assert mgmt["ceo_employee_rating"] == 4.6
+    assert mgmt["employee_happiness_score"] == 4.3
+    assert mgmt["review_count"] == "60,000+ reviews"
+    assert mgmt["sentiment_source"] == "Glassdoor"
+    assert mgmt["sentiment_grounded"] is True
+    assert mgmt["sentiment_generated_at"] == "2026-11-22T20:00:00+00:00"
+    assert len(mgmt["sentiment_sources"]) == 1
+
+
+def test_generateAndCacheReport_fetchesAndCachesGroundedEmployeeSentiment(calculator):
+    mock_finnhub = MagicMock()
+    mock_finnhub.get_profile.return_value = {"ticker": "NVDA", "name": "NVIDIA Corp", "finnhubIndustry": "Semiconductors"}
+    mock_finnhub.get_metrics.return_value = {"metric": {}, "series": {"annual": {}}}
+    mock_finnhub.extract_key_metrics.return_value = {"history": {"revenue": [{"year": 2025, "value": 130e9}]}}
+    mock_finnhub.get_quote.return_value = {"c": 140.0}
+
+    mock_ai = MagicMock()
+    mock_ai.analyze_qualitative.return_value = {
+        "overview": "AI compute leader.",
+        "management": {"ceo_employee_rating": 96.0, "employee_happiness_score": 90.0},
+    }
+    mock_ai.analyze_business_model.return_value = {"executive_summary": "GPU + CUDA platform."}
+    mock_ai.analyze_growth_company.return_value = {"cash_burn": {"verdict": "Pass", "justification": "High FCF."}}
+    mock_ai.fetch_employee_sentiment.return_value = {
+        "ceo_name": "Jensen Huang",
+        "ceo_tenure_years": 33,
+        "ceo_approval_pct": 97,
+        "ceo_employee_rating": 4.9,
+        "employee_happiness_score": 4.6,
+        "source_platform": "Glassdoor",
+        "grounding_sources": [{"title": "Glassdoor", "url": "https://www.glassdoor.com/nvidia"}],
+        "grounded": True,
+    }
+
+    mock_db = MagicMock()
+    mock_db.get_company_data.return_value = None
+
+    report = generate_and_cache_report(
+        "NVDA", mock_finnhub, calculator, mock_ai, mock_db, force_fresh=True
+    )
+
+    mock_ai.fetch_employee_sentiment.assert_called_once_with("NVIDIA Corp", "NVDA")
+    mgmt = report["qualitative"]["management"]
+    assert mgmt["ceo_name"] == "Jensen Huang"
+    assert mgmt["ceo_employee_rating"] == 4.9
+    assert mgmt["employee_happiness_score"] == 4.6
+    assert mgmt["ceo_approval_pct"] == 97
+    assert mgmt["sentiment_grounded"] is True
+
+    saved_payload = mock_db.save_company_data.call_args[0][1]
+    assert "employee_sentiment" in saved_payload["context"]
+    assert saved_payload["context"]["employee_sentiment"]["ceo_name"] == "Jensen Huang"
+    assert "generated_at" in saved_payload["context"]["employee_sentiment"]
+
+
+def test_computeBig4TtmFromCachedMetrics_derivesAllFourWithoutXbrlTtm(calculator):
+    raw_data = {
+        "ticker": "MSFT",
+        "profile": {"name": "Microsoft Corp", "shareOutstanding": 7430},
+        "metrics": {
+            "metric": {
+                "marketCapitalization": 3598139.8,
+                "psTTM": 10.3859,
+                "peTTM": 25.2269,
+                "pcfShareTTM": 18.3693,
+                "pfcfShareTTM": 60.012,
+                "netProfitMarginTTM": 41.17,
+            },
+            "series": {
+                "quarterly": {
+                    "eps": [{"period": "2026-09-30", "v": 4.92}],
+                    "bookValue": [{"period": "2026-09-30", "v": 470509}],
+                }
+            },
+        },
+        "financials": {
+            "history": {
+                "revenue": [{"year": 2025, "value": 281724000000.0}],
+                "net_income": [{"year": 2025, "value": 101832000000.0}],
+                "operating_cash_flow": [{"year": 2025, "value": 136162000000.0}],
+                "book_value": [{"year": 2025, "value": 343479000000.0}],
+            }
+        },
+        "price_at_storage": 484.0,
+    }
+
+    report = compute_report_from_raw(raw_data, calculator)
+    big4_ttm = report["financials"]["raw_data"]["big4_ttm"]
+
+    assert big4_ttm["revenue"]["value"] == pytest.approx(346444679806.0, rel=1e-4)
+    assert big4_ttm["revenue"]["period"] == "2026-09-30"
+    assert big4_ttm["revenue"]["period_type"] == "TTM"
+    assert big4_ttm["revenue"]["source"] == "finnhub_metrics"
+
+    assert big4_ttm["net_income"]["value"] == pytest.approx(142631072387.0, rel=1e-4)
+    assert big4_ttm["operating_cash_flow"]["value"] == pytest.approx(195877894095.0, rel=1e-4)
+
+    assert big4_ttm["book_value"]["value"] == pytest.approx(470509000000.0)
+    assert big4_ttm["book_value"]["period"] == "2026-09-30"
+    assert big4_ttm["book_value"]["period_type"] == "MRQ"
+
+
+def test_computeBig4TtmNegativeNetIncomeAndStaleBookValue_usesMarginAndRejectsStaleBv():
+    financials = {
+        "history": {
+            "book_value": [{"year": 2025, "value": -8096600000.0}],
+        }
+    }
+    metrics = {
+        "metric": {
+            "marketCapitalization": 15121.045,
+            "psTTM": 2.3335,
+            "peTTM": None,
+            "pcfShareTTM": None,
+            "netProfitMarginTTM": -45.88,
+            "bookValuePerShareQuarterly": 0.8934,
+        },
+        "series": {
+            "quarterly": {
+                "eps": [{"period": "2026-09-30", "v": -0.75}],
+                # Stale 2018 bookValue frozen when equity turned negative (e.g. SBUX/MCD)
+                "bookValue": [{"period": "2018-09-30", "v": 1169.5}],
+            }
+        },
+    }
+
+    ttm = compute_big4_ttm(financials=financials, metrics=metrics, effective_shares=1_000_000_000.0)
+
+    assert ttm["revenue"]["value"] == pytest.approx(6479984999.0, rel=1e-3)
+    assert ttm["net_income"]["value"] == pytest.approx(-2973017118.0, rel=1e-3)
+    assert ttm["operating_cash_flow"]["value"] is None
+    assert ttm["operating_cash_flow"]["source"] == "unavailable"
+    assert ttm["book_value"]["value"] is None
+    assert ttm["book_value"]["source"] == "unavailable"
+    assert ttm["book_value"]["period_type"] == "MRQ"
+
+
+def test_computeBig4TtmReconciliation_prefersNewerMetricsAndDirectXbrlWhenSamePeriod():
+    # Case 1: metrics is 1 quarter newer (NVDA Q3 FY27 vs XBRL Q2 FY27) -> prefer metrics
+    nvda_ttm = compute_big4_ttm(
+        financials={
+            "ttm": {
+                "revenue": {"value": 302.9e9, "period": "2026-07-26", "period_type": "TTM", "source": "xbrl_quarterly"},
+            }
+        },
+        metrics={
+            "metric": {"marketCapitalization": 3025273.0, "psTTM": 8.3616},
+            "series": {"quarterly": {"eps": [{"period": "2026-10-25", "v": 2.8}]}},
+        },
+    )
+    assert nvda_ttm["revenue"]["source"] == "finnhub_metrics"
+    assert nvda_ttm["revenue"]["period"] == "2026-10-25"
+    assert nvda_ttm["revenue"]["value"] == pytest.approx(361.8055e9, rel=1e-3)
+
+    # Case 2: same period -> prefer direct XBRL for flow items, metrics fallback for missing BS equity
+    same_period_ttm = compute_big4_ttm(
+        financials={
+            "ttm": {
+                "revenue": {"value": 797.455e9, "period": "2026-09-30", "period_type": "TTM", "source": "xbrl_quarterly"},
+                "operating_cash_flow": {"value": -2.629e9, "period": "2026-09-30", "period_type": "TTM", "source": "xbrl_quarterly"},
+            }
+        },
+        metrics={
+            "metric": {"marketCapitalization": 2668898.8, "psTTM": 3.3468, "pcfShareTTM": None},
+            "series": {
+                "quarterly": {
+                    "eps": [{"period": "2026-09-30", "v": 3.1}],
+                    "bookValue": [{"period": "2026-09-30", "v": 613601}],
+                }
+            },
+        },
+    )
+    assert same_period_ttm["revenue"]["source"] == "xbrl_quarterly"
+    assert same_period_ttm["revenue"]["value"] == pytest.approx(797.455e9)
+    assert same_period_ttm["operating_cash_flow"]["source"] == "xbrl_quarterly"
+    assert same_period_ttm["operating_cash_flow"]["value"] == pytest.approx(-2.629e9)
+    assert same_period_ttm["book_value"]["source"] == "finnhub_metrics"
+    assert same_period_ttm["book_value"]["value"] == pytest.approx(613.601e9)
+
 
 

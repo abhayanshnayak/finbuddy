@@ -202,6 +202,13 @@ export const GLOSSARY = {
     formula: 'CAGR = (Ending Value ÷ Beginning Value)^(1/n) − 1',
     benchmark: 'Target: ≥ 10% CAGR across all four metrics',
   },
+  big4Ttm: {
+    title: 'TTM & MRQ Run-Rate Values',
+    summary:
+      'Trailing Twelve Months (TTM) sums the last four reported quarters for flow metrics (Revenue, Net Income, Operating Cash Flow). Book Value is a balance-sheet snapshot, so it shows the Most Recent Quarter (MRQ). Historical 1Y–10Y CAGRs stay anchored on fiscal year-end (EOY) filings for clean apples-to-apples compounding.',
+    formula: 'TTM = Prior FY + Current YTD − Prior-Year YTD · Book Value = Latest Quarter Equity',
+    benchmark: 'Compare TTM against the latest FY bar to spot mid-year acceleration or slowdown',
+  },
   returns: {
     title: 'ROIC & ROE (Capital Efficiency)',
     summary:

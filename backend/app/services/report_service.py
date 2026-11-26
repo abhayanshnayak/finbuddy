@@ -1,13 +1,376 @@
+import math
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import date, datetime
 import pytz
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from app.services.finnhub_client import FinnhubClient
 from app.services.calculator import FinancialCalculator
 from app.services.analyst_service import AnalystService
 from app.services.db_service import DBService
+
+
+def _to_finite_float(value) -> Optional[float]:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        num = float(value)
+        return num if math.isfinite(num) else None
+    if isinstance(value, str):
+        cleaned = value.strip().replace("%", "").replace(",", "")
+        if not cleaned:
+            return None
+        if "/" in cleaned:
+            cleaned = cleaned.split("/", 1)[0].strip()
+        try:
+            num = float(cleaned)
+            return num if math.isfinite(num) else None
+        except ValueError:
+            return None
+    return None
+
+
+def normalize_rating_to_5(value) -> Optional[float]:
+    """
+    Normalizes a CEO or employee rating onto a strict 0.0-5.0 scale so the numerator
+    can never exceed 5.0 (even for legacy cached entries stored as 0-10 or 0-100).
+    """
+    num = _to_finite_float(value)
+    if num is None or num <= 0:
+        return None
+    if num <= 5.0:
+        scaled = num
+    elif num <= 10.0:
+        scaled = (num / 10.0) * 5.0
+    elif num <= 100.0:
+        scaled = (num / 100.0) * 5.0
+    else:
+        scaled = 5.0
+    return round(min(5.0, max(0.0, scaled)), 1)
+
+
+def normalize_percentage(value) -> Optional[int]:
+    """Normalizes a percentage figure (e.g. CEO approval) onto an integer 0-100 scale."""
+    num = _to_finite_float(value)
+    if num is None or num <= 0:
+        return None
+    if num <= 1.0:
+        num *= 100.0
+    return int(round(min(100.0, max(0.0, num))))
+
+
+def normalize_employee_sentiment(sentiment: Optional[dict]) -> dict:
+    """Sanitizes and normalizes a grounded employee/CEO sentiment payload."""
+    if not isinstance(sentiment, dict) or "error" in sentiment:
+        return {}
+
+    raw_ceo_rating = sentiment.get("ceo_employee_rating")
+    raw_ceo_num = _to_finite_float(raw_ceo_rating)
+
+    ceo_approval_pct = normalize_percentage(sentiment.get("ceo_approval_pct"))
+    if ceo_approval_pct is None and raw_ceo_num is not None and 10.0 < raw_ceo_num <= 100.0:
+        ceo_approval_pct = int(round(raw_ceo_num))
+
+    ceo_rating = normalize_rating_to_5(raw_ceo_rating)
+    if ceo_rating is None and ceo_approval_pct is not None:
+        ceo_rating = round((ceo_approval_pct / 100.0) * 5.0, 1)
+
+    emp_score = normalize_rating_to_5(sentiment.get("employee_happiness_score"))
+
+    raw_tenure = _to_finite_float(sentiment.get("ceo_tenure_years"))
+    ceo_tenure = None
+    if raw_tenure is not None and 0 <= raw_tenure <= 80:
+        rounded_tenure = round(raw_tenure, 1)
+        ceo_tenure = int(rounded_tenure) if rounded_tenure.is_integer() else rounded_tenure
+
+    raw_sources = sentiment.get("grounding_sources")
+    clean_sources = []
+    if isinstance(raw_sources, list):
+        for src in raw_sources:
+            if isinstance(src, dict) and isinstance(src.get("url"), str) and src["url"].strip():
+                clean_sources.append({
+                    "title": str(src.get("title") or src["url"]).strip(),
+                    "url": src["url"].strip(),
+                })
+
+    raw_queries = sentiment.get("search_queries")
+    clean_queries = (
+        [q.strip() for q in raw_queries if isinstance(q, str) and q.strip()]
+        if isinstance(raw_queries, list)
+        else []
+    )
+
+    ceo_name = sentiment.get("ceo_name")
+    ceo_name = ceo_name.strip() if isinstance(ceo_name, str) and ceo_name.strip() else None
+
+    review_count = sentiment.get("review_count")
+    review_count = (
+        review_count.strip()
+        if isinstance(review_count, str) and review_count.strip()
+        else None
+    )
+
+    source_platform = sentiment.get("source_platform")
+    source_platform = (
+        source_platform.strip()
+        if isinstance(source_platform, str) and source_platform.strip()
+        else None
+    )
+
+    notes = sentiment.get("notes")
+    notes = notes.strip() if isinstance(notes, str) and notes.strip() else None
+
+    normalized = {
+        "ceo_name": ceo_name,
+        "ceo_tenure_years": ceo_tenure,
+        "ceo_approval_pct": ceo_approval_pct,
+        "ceo_employee_rating": ceo_rating,
+        "employee_happiness_score": emp_score,
+        "review_count": review_count,
+        "source_platform": source_platform,
+        "notes": notes,
+        "grounding_sources": clean_sources,
+        "search_queries": clean_queries,
+        "grounded": bool(sentiment.get("grounded") or clean_sources or clean_queries),
+    }
+    if sentiment.get("generated_at"):
+        normalized["generated_at"] = sentiment["generated_at"]
+    return normalized
+
+
+def merge_management_data(
+    ai_management: Optional[dict],
+    grounded_sentiment: Optional[dict] = None,
+) -> dict:
+    """
+    Merges qualitative management fields with Google-Search-grounded employee/CEO sentiment
+    and guarantees all 5-point ratings stay strictly within [0.0, 5.0].
+    """
+    merged = dict(ai_management) if isinstance(ai_management, dict) else {}
+
+    legacy_ceo_raw = merged.get("ceo_employee_rating")
+    legacy_ceo_num = _to_finite_float(legacy_ceo_raw)
+    legacy_approval_pct = (
+        int(round(legacy_ceo_num))
+        if legacy_ceo_num is not None and 10.0 < legacy_ceo_num <= 100.0
+        else None
+    )
+
+    ceo_rating = normalize_rating_to_5(legacy_ceo_raw)
+    emp_score = normalize_rating_to_5(merged.get("employee_happiness_score"))
+    ceo_approval_pct = normalize_percentage(merged.get("ceo_approval_pct")) or legacy_approval_pct
+
+    norm_grounded = normalize_employee_sentiment(grounded_sentiment)
+    if norm_grounded:
+        if norm_grounded.get("ceo_name"):
+            merged["ceo_name"] = norm_grounded["ceo_name"]
+        if norm_grounded.get("ceo_tenure_years") is not None:
+            merged["ceo_tenure_years"] = norm_grounded["ceo_tenure_years"]
+        if norm_grounded.get("ceo_approval_pct") is not None:
+            ceo_approval_pct = norm_grounded["ceo_approval_pct"]
+        if norm_grounded.get("ceo_employee_rating") is not None:
+            ceo_rating = norm_grounded["ceo_employee_rating"]
+        if norm_grounded.get("employee_happiness_score") is not None:
+            emp_score = norm_grounded["employee_happiness_score"]
+        if norm_grounded.get("review_count"):
+            merged["review_count"] = norm_grounded["review_count"]
+        if norm_grounded.get("source_platform"):
+            merged["sentiment_source"] = norm_grounded["source_platform"]
+        if norm_grounded.get("notes"):
+            merged["sentiment_notes"] = norm_grounded["notes"]
+        merged["sentiment_sources"] = norm_grounded.get("grounding_sources", [])
+        merged["sentiment_grounded"] = bool(norm_grounded.get("grounded", False))
+        if norm_grounded.get("generated_at"):
+            merged["sentiment_generated_at"] = norm_grounded["generated_at"]
+    else:
+        merged.setdefault("sentiment_grounded", False)
+
+    merged["ceo_employee_rating"] = ceo_rating
+    merged["employee_happiness_score"] = emp_score
+    if ceo_approval_pct is not None:
+        merged["ceo_approval_pct"] = ceo_approval_pct
+
+    return merged
+
+
+def _to_positive_float(val: Any) -> Optional[float]:
+    num = _to_finite_float(val)
+    return num if (num is not None and num > 0) else None
+
+
+def _parse_iso_date(raw_date: Any) -> Optional[date]:
+    if not raw_date or not isinstance(raw_date, str):
+        return None
+    try:
+        return date.fromisoformat(raw_date.strip()[:10])
+    except ValueError:
+        return None
+
+
+def compute_big4_ttm(
+    financials: dict,
+    metrics: dict,
+    effective_shares: float = 0.0,
+) -> Dict[str, Dict[str, Any]]:
+    """Computes Big 4 TTM (Revenue, Net Income, Operating Cash Flow) and MRQ (Book Value).
+
+    Combines direct SEC XBRL quarterly/annual TTM (`financials["ttm"]`) with Finnhub
+    `metrics` TTM/quarterly derivations so both freshly fetched and already-cached
+    companies receive accurate TTM values, while preferring whichever source is fresher
+    (or direct XBRL when periods match). Includes freshness guards to reject stale
+    Finnhub book-value series on negative-equity companies.
+    """
+    xbrl_ttm = (financials or {}).get("ttm") or {}
+    history = (financials or {}).get("history") or {}
+    metric_dict = (metrics or {}).get("metric") or {}
+    series_quarterly = ((metrics or {}).get("series") or {}).get("quarterly") or {}
+
+    latest_flow_dt: Optional[date] = None
+    latest_flow_period: Optional[str] = None
+    for series_key in ("eps", "salesPerShare", "netMargin", "ev"):
+        for item in series_quarterly.get(series_key) or []:
+            dt = _parse_iso_date(item.get("period"))
+            if dt and (latest_flow_dt is None or dt > latest_flow_dt):
+                latest_flow_dt = dt
+                latest_flow_period = dt.isoformat()
+
+    mc_millions = _to_positive_float(metric_dict.get("marketCapitalization"))
+    mc_dollars = mc_millions * 1_000_000.0 if mc_millions is not None else None
+    shares = effective_shares if (effective_shares and effective_shares > 0) else 0.0
+
+    metrics_candidates: Dict[str, Dict[str, Any]] = {}
+
+    # 1. Revenue TTM from Finnhub metrics
+    rev_val: Optional[float] = None
+    ps_ttm = _to_positive_float(metric_dict.get("psTTM"))
+    if mc_dollars is not None and ps_ttm is not None:
+        rev_val = mc_dollars / ps_ttm
+    else:
+        rev_per_share = _to_finite_float(metric_dict.get("revenuePerShareTTM"))
+        if rev_per_share is not None and shares > 0:
+            rev_val = rev_per_share * shares
+
+    if rev_val is not None:
+        metrics_candidates["revenue"] = {
+            "value": rev_val,
+            "period": latest_flow_period,
+            "period_type": "TTM",
+            "source": "finnhub_metrics",
+        }
+
+    # 2. Net Income TTM from Finnhub metrics (supports negative earnings via netProfitMarginTTM / epsTTM)
+    ni_val: Optional[float] = None
+    pe_ttm = _to_positive_float(metric_dict.get("peTTM")) or _to_positive_float(metric_dict.get("peExclExtraTTM"))
+    if mc_dollars is not None and pe_ttm is not None:
+        ni_val = mc_dollars / pe_ttm
+    else:
+        npm_ttm = _to_finite_float(metric_dict.get("netProfitMarginTTM"))
+        if rev_val is not None and rev_val > 0 and npm_ttm is not None:
+            ni_val = rev_val * (npm_ttm / 100.0)
+        else:
+            eps_raw = metric_dict.get("epsTTM")
+            if eps_raw is None:
+                eps_raw = metric_dict.get("epsBasicExclExtraItemsTTM")
+            eps_ttm = _to_finite_float(eps_raw)
+            if eps_ttm is not None and shares > 0:
+                ni_val = eps_ttm * shares
+
+    if ni_val is not None:
+        metrics_candidates["net_income"] = {
+            "value": ni_val,
+            "period": latest_flow_period,
+            "period_type": "TTM",
+            "source": "finnhub_metrics",
+        }
+
+    # 3. Operating Cash Flow TTM from Finnhub metrics (pcfShareTTM is Price/OCF; do not confuse with pfcfShareTTM)
+    pcf_ttm = _to_positive_float(metric_dict.get("pcfShareTTM"))
+    if mc_dollars is not None and pcf_ttm is not None:
+        metrics_candidates["operating_cash_flow"] = {
+            "value": mc_dollars / pcf_ttm,
+            "period": latest_flow_period,
+            "period_type": "TTM",
+            "source": "finnhub_metrics",
+        }
+
+    # 4. Book Value MRQ (Stockholders' Equity snapshot) from Finnhub metrics with staleness guard
+    bv_hist = history.get("book_value") or []
+    latest_annual_bv_year = bv_hist[-1].get("year") if bv_hist else None
+    latest_annual_bv_val = _to_finite_float(bv_hist[-1].get("value")) if bv_hist else None
+
+    bv_series = series_quarterly.get("bookValue") or []
+    latest_bv_dt: Optional[date] = None
+    latest_bv_val_m: Optional[float] = None
+    for item in bv_series:
+        dt = _parse_iso_date(item.get("period"))
+        v_num = _to_finite_float(item.get("v"))
+        if dt is not None and v_num is not None and (latest_bv_dt is None or dt > latest_bv_dt):
+            latest_bv_dt = dt
+            latest_bv_val_m = v_num
+
+    if latest_bv_dt is not None and latest_bv_val_m is not None:
+        is_stale = False
+        if isinstance(latest_annual_bv_year, int) and latest_bv_dt.year < latest_annual_bv_year:
+            is_stale = True
+        if latest_flow_dt is not None and (latest_flow_dt - latest_bv_dt).days > 200:
+            is_stale = True
+
+        if not is_stale:
+            metrics_candidates["book_value"] = {
+                "value": latest_bv_val_m * 1_000_000.0,
+                "period": latest_bv_dt.isoformat(),
+                "period_type": "MRQ",
+                "source": "finnhub_metrics",
+            }
+    elif not bv_series:
+        bvps_q = _to_finite_float(metric_dict.get("bookValuePerShareQuarterly"))
+        if bvps_q is not None and shares > 0:
+            if latest_annual_bv_val is None or latest_annual_bv_val >= 0 or bvps_q < 0:
+                metrics_candidates["book_value"] = {
+                    "value": bvps_q * shares,
+                    "period": latest_flow_period,
+                    "period_type": "MRQ",
+                    "source": "finnhub_metrics",
+                }
+
+    result: Dict[str, Dict[str, Any]] = {}
+    for metric_key in ("revenue", "net_income", "operating_cash_flow", "book_value"):
+        default_period_type = "MRQ" if metric_key == "book_value" else "TTM"
+        raw_x = xbrl_ttm.get(metric_key)
+        x_entry = None
+        if isinstance(raw_x, dict):
+            x_val = _to_finite_float(raw_x.get("value"))
+            if x_val is not None:
+                x_entry = {
+                    "value": x_val,
+                    "period": raw_x.get("period"),
+                    "period_type": raw_x.get("period_type") or default_period_type,
+                    "source": raw_x.get("source") or "xbrl_quarterly",
+                }
+
+        m_entry = metrics_candidates.get(metric_key)
+
+        if x_entry and m_entry:
+            x_dt = _parse_iso_date(x_entry.get("period"))
+            m_dt = _parse_iso_date(m_entry.get("period"))
+            if x_dt and m_dt and (m_dt - x_dt).days > 15:
+                result[metric_key] = m_entry
+            else:
+                result[metric_key] = x_entry
+        elif x_entry:
+            result[metric_key] = x_entry
+        elif m_entry:
+            result[metric_key] = m_entry
+        else:
+            result[metric_key] = {
+                "value": None,
+                "period": None,
+                "period_type": default_period_type,
+                "source": "unavailable",
+            }
+
+    return result
 
 def build_growth_analysis_context(ticker: str, name: str, financials: dict, metrics: dict, profile: dict, current_price: float) -> dict:
     history = financials.get("history", {})
@@ -114,6 +477,11 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
         "book_value": list(calc.calculate_growth_rates(history.get("book_value", [])).values()),
         "operating_cash_flow": list(calc.calculate_growth_rates(history.get("operating_cash_flow", [])).values())
     }
+    big4_ttm = compute_big4_ttm(
+        financials=financials,
+        metrics=metrics,
+        effective_shares=effective_shares,
+    )
     
     fcf_history = []
     ocf_list = history.get("operating_cash_flow", [])
@@ -308,7 +676,8 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
                 "roe_history": roe_history,
                 "roic_history": roic_history,
                 "total_debt": financials.get("latest_total_debt", 0),
-                "cash_and_equivalents": financials.get("latest_cash", 0)
+                "cash_and_equivalents": financials.get("latest_cash", 0),
+                "big4_ttm": big4_ttm
             },
             "derived_metrics": {
                 "growth_rates_1_3_5_10_yr": growth_rates,
@@ -373,7 +742,10 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
             "risks": ai_analysis.get("risks", {}),
             "moats": ai_analysis.get("moats", {}),
             "management": {
-                **ai_analysis.get("management", {}),
+                **merge_management_data(
+                    ai_analysis.get("management", {}),
+                    (raw_data.get("context") or {}).get("employee_sentiment"),
+                ),
                 "roic_3_yr_avg": roic_averages.get("3_yr", 0),
                 "roic_5_yr_avg": roic_averages.get("5_yr", 0),
                 "roic_10_yr_avg": roic_averages.get("10_yr", 0),
@@ -444,7 +816,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         ticker = actual_ticker
         
         metrics = finnhub.get_metrics(ticker)
-        financials = finnhub.extract_key_metrics(ticker)
+        financials = finnhub.extract_key_metrics(ticker, include_ttm=True)
     except Exception as e:
         raise Exception(f"Failed to fetch stock data for {ticker}: {e}")
 
@@ -468,11 +840,12 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         current_price=current_price,
     )
 
-    # 3. Prompt AI (qualitative, business model, and growth synthesis in parallel)
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    # 3. Prompt AI (qualitative, business model, growth, and grounded employee sentiment in parallel)
+    with ThreadPoolExecutor(max_workers=4) as executor:
         qual_future = executor.submit(ai.analyze_qualitative, company_name, profile, metrics)
         bm_future = executor.submit(ai.analyze_business_model, company_name, business_model_context)
         growth_future = executor.submit(ai.analyze_growth_company, company_name, growth_context)
+        sentiment_future = executor.submit(ai.fetch_employee_sentiment, company_name, ticker)
 
         try:
             ai_analysis = qual_future.result()
@@ -490,6 +863,12 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         except Exception as e:
             print(f"Failed to generate growth analysis for {ticker}: {e}")
             growth_analysis = {"error": str(e)}
+
+        try:
+            employee_sentiment = sentiment_future.result()
+        except Exception as e:
+            print(f"Failed to fetch grounded employee sentiment for {ticker}: {e}")
+            employee_sentiment = {"error": str(e)}
 
     if "error" in ai_analysis:
         if existing_data and "ai_analysis" in existing_data and "error" not in existing_data["ai_analysis"]:
@@ -536,6 +915,17 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
             else {}
         )
 
+    if isinstance(employee_sentiment, dict) and "error" not in employee_sentiment:
+        employee_sentiment = normalize_employee_sentiment(employee_sentiment)
+        employee_sentiment["generated_at"] = datetime.now(pytz.utc).isoformat()
+    else:
+        existing_sentiment = (existing_data or {}).get("context", {}).get("employee_sentiment")
+        employee_sentiment = (
+            normalize_employee_sentiment(existing_sentiment)
+            if isinstance(existing_sentiment, dict) and "error" not in existing_sentiment
+            else {}
+        )
+
     # Generate timestamp in PST
     pst_tz = pytz.timezone('US/Pacific')
     fetched_at = datetime.now(pytz.utc).astimezone(pst_tz)
@@ -556,6 +946,7 @@ def generate_and_cache_report(ticker: str, finnhub: FinnhubClient, calc: Financi
         "context": {
             "growth_company_analysis": growth_analysis,
             "business_model_analysis": business_model_analysis,
+            "employee_sentiment": employee_sentiment,
         }
     }
 

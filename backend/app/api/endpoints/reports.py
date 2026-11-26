@@ -8,9 +8,57 @@ from app.services.report_service import (
     generate_and_cache_report,
     build_growth_analysis_context,
     build_business_model_context,
+    normalize_employee_sentiment,
 )
 
 router = APIRouter()
+
+
+@router.get("/stocks/{ticker}/employee-sentiment")
+async def get_employee_sentiment(ticker: str, force_fresh: bool = False):
+    """
+    Fetches Google-Search-grounded employee sentiment and CEO approval ratings from the database.
+    If not cached or force_fresh is true, queries Gemini with Google Search grounding, normalizes
+    ratings onto a strict 0.0-5.0 scale, caches in Firestore, and returns the payload.
+    """
+    ticker = ticker.upper()
+    try:
+        company_data = db.get_company_data(ticker) or {}
+        context = company_data.get("context") or {}
+        sentiment = context.get("employee_sentiment")
+
+        if (
+            sentiment
+            and isinstance(sentiment, dict)
+            and "error" not in sentiment
+            and not force_fresh
+        ):
+            return normalize_employee_sentiment(sentiment)
+
+        if not company_data:
+            raise HTTPException(
+                status_code=400,
+                detail="No company data available for this ticker to analyze.",
+            )
+
+        company_name = company_data.get("name", ticker)
+        raw_result = ai.fetch_employee_sentiment(company_name, ticker)
+
+        if not isinstance(raw_result, dict) or "error" in raw_result:
+            detail = raw_result.get("error") if isinstance(raw_result, dict) else "Failed to fetch employee sentiment."
+            raise HTTPException(status_code=500, detail=detail)
+
+        normalized = normalize_employee_sentiment(raw_result)
+        normalized["generated_at"] = datetime.now(pytz.utc).isoformat()
+        db.update_company_field(ticker, "employee_sentiment", normalized)
+
+        return normalized
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error in get_employee_sentiment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stocks/{ticker}/business-model")
 async def get_business_model_analysis(ticker: str, force_fresh: bool = False):

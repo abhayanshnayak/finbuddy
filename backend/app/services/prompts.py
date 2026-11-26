@@ -14,6 +14,8 @@ QUALITATIVE_ANALYSIS_PROMPT = """
         
         Using your internal knowledge of the NAICS (North American Industry Classification System) taxonomy, classify the company into its most accurate Sector (2-digit level), Subsector (3-digit level), and Industry Group (4-digit level).
 
+        For the management section, `ceo_employee_rating` and `employee_happiness_score` MUST strictly use a 0.0 to 5.0 numeric scale (never 0–100 percentages; convert any percentage approval such as 88% by dividing by 20, e.g. 4.4).
+
         Please provide a detailed qualitative analysis in JSON format exactly matching this structure:
         {{
             "overview": "A comprehensive, multi-paragraph overview of the company's business model, operations, and general context.",
@@ -198,4 +200,29 @@ BUSINESS_MODEL_PROMPT = """
         }}
 
         Return ONLY the raw JSON object. Do not include markdown code blocks.
+"""
+
+EMPLOYEE_SENTIMENT_PROMPT = """
+        You are a financial research assistant gathering verified public employer sentiment and CEO approval data for: {company_name} (Ticker: {ticker}).
+
+        Use Google Search to find the most recent publicly reported employee ratings and CEO approval ratings for {company_name} from Glassdoor, Comparably, and/or Indeed.
+
+        STRICT SCALING & ACCURACY RULES:
+        - Do NOT guess or fabricate figures if they cannot be found in search results; use null for any field that is unavailable.
+        - `ceo_approval_pct`: Employee CEO approval percentage on a 0 to 100 scale (e.g., 88 for 88% Glassdoor CEO approval; null if not found).
+        - `ceo_employee_rating`: CEO rating STRICTLY on a 0.0 to 5.0 scale (rounded to 1 decimal place). If the source reports CEO approval as a percentage (e.g., 88%), convert it to the 5.0 scale using `(ceo_approval_pct / 100) * 5.0` (e.g., 4.4). NEVER return a number greater than 5.0. Use null if unavailable.
+        - `employee_happiness_score`: Overall company employee rating STRICTLY on a 0.0 to 5.0 scale (rounded to 1 decimal place, e.g., Glassdoor overall rating 4.2 out of 5.0, or Comparably/Indeed overall score converted to a 0.0-5.0 scale). NEVER return a number greater than 5.0. Use null if unavailable.
+        - `ceo_tenure_years`: Approximate years the current CEO has served as CEO (non-negative number, or null if unknown).
+
+        Return ONLY a raw JSON object matching this exact structure (no markdown code blocks, no extra prose):
+        {{
+            "ceo_name": "Full name of the current CEO, or null",
+            "ceo_tenure_years": 0.0,
+            "ceo_approval_pct": 85,
+            "ceo_employee_rating": 4.3,
+            "employee_happiness_score": 4.1,
+            "review_count": "Approximate number of reviews if reported (e.g., '45,000+ reviews'), or null",
+            "source_platform": "Primary source platform(s) found (e.g., 'Glassdoor', 'Comparably', 'Glassdoor & Indeed', or 'Unavailable')",
+            "notes": "One concise sentence summarizing the reported ratings and review sample."
+        }}
 """

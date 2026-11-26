@@ -205,3 +205,117 @@ def test_getBusinessModelForceFresh_bypassesCacheAndCallsAI(mocker):
     mock_ai.analyze_business_model.assert_called_once()
     mock_db.update_company_field.assert_called_once()
 
+
+def test_getEmployeeSentimentCachedData_returnsNormalizedFromCacheWithoutCallingAI(mocker):
+    mock_db = MagicMock()
+    mock_db.get_company_data.return_value = {
+        "name": "Apple Inc.",
+        "context": {
+            "employee_sentiment": {
+                "ceo_name": "Tim Cook",
+                "ceo_approval_pct": 90,
+                "ceo_employee_rating": 90,
+                "employee_happiness_score": 4.2,
+                "source_platform": "Glassdoor",
+                "grounded": True,
+            }
+        },
+    }
+    mocker.patch("app.api.endpoints.reports.db", mock_db)
+    mock_ai = MagicMock()
+    mocker.patch("app.api.endpoints.reports.ai", mock_ai)
+
+    response = client.get("/api/stocks/AAPL/employee-sentiment")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ceo_name"] == "Tim Cook"
+    assert data["ceo_approval_pct"] == 90
+    assert data["ceo_employee_rating"] == 4.5
+    assert data["employee_happiness_score"] == 4.2
+    assert data["grounded"] is True
+    mock_ai.fetch_employee_sentiment.assert_not_called()
+
+
+def test_getEmployeeSentimentMissingCompany_returns400(mocker):
+    mock_db = MagicMock()
+    mock_db.get_company_data.return_value = {}
+    mocker.patch("app.api.endpoints.reports.db", mock_db)
+
+    response = client.get("/api/stocks/UNKNOWN/employee-sentiment")
+
+    assert response.status_code == 400
+    assert "No company data available" in response.json()["detail"]
+
+
+def test_getEmployeeSentimentNotCached_callsAIAndUpdatesDB(mocker):
+    mock_db = MagicMock()
+    mock_db.get_company_data.return_value = {
+        "name": "Microsoft Corp",
+        "context": {},
+    }
+    mocker.patch("app.api.endpoints.reports.db", mock_db)
+
+    mock_ai = MagicMock()
+    mock_ai.fetch_employee_sentiment.return_value = {
+        "ceo_name": "Satya Nadella",
+        "ceo_tenure_years": 12,
+        "ceo_approval_pct": 92,
+        "ceo_employee_rating": 4.6,
+        "employee_happiness_score": 4.3,
+        "source_platform": "Glassdoor",
+        "grounding_sources": [{"title": "Glassdoor", "url": "https://www.glassdoor.com/msft"}],
+        "grounded": True,
+    }
+    mocker.patch("app.api.endpoints.reports.ai", mock_ai)
+
+    response = client.get("/api/stocks/MSFT/employee-sentiment")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ceo_name"] == "Satya Nadella"
+    assert data["ceo_employee_rating"] == 4.6
+    assert data["employee_happiness_score"] == 4.3
+    assert data["grounded"] is True
+    assert "generated_at" in data
+    mock_ai.fetch_employee_sentiment.assert_called_once_with("Microsoft Corp", "MSFT")
+    mock_db.update_company_field.assert_called_once()
+    assert mock_db.update_company_field.call_args[0][0] == "MSFT"
+    assert mock_db.update_company_field.call_args[0][1] == "employee_sentiment"
+
+
+def test_getEmployeeSentimentForceFresh_bypassesCacheAndCallsAI(mocker):
+    mock_db = MagicMock()
+    mock_db.get_company_data.return_value = {
+        "name": "Apple Inc.",
+        "context": {
+            "employee_sentiment": {
+                "ceo_name": "Tim Cook",
+                "ceo_employee_rating": 4.0,
+                "employee_happiness_score": 3.9,
+                "grounded": True,
+            }
+        },
+    }
+    mocker.patch("app.api.endpoints.reports.db", mock_db)
+
+    mock_ai = MagicMock()
+    mock_ai.fetch_employee_sentiment.return_value = {
+        "ceo_name": "Tim Cook",
+        "ceo_approval_pct": 91,
+        "ceo_employee_rating": 4.6,
+        "employee_happiness_score": 4.2,
+        "source_platform": "Glassdoor",
+        "grounded": True,
+    }
+    mocker.patch("app.api.endpoints.reports.ai", mock_ai)
+
+    response = client.get("/api/stocks/AAPL/employee-sentiment?force_fresh=true")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ceo_employee_rating"] == 4.6
+    assert data["employee_happiness_score"] == 4.2
+    mock_ai.fetch_employee_sentiment.assert_called_once_with("Apple Inc.", "AAPL")
+    mock_db.update_company_field.assert_called_once()
+

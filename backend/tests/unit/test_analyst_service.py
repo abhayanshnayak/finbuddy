@@ -182,3 +182,80 @@ def test_analyzeBusinessModelFallbackOrder_triesAllModels(service, mocker_genai_
         ("gemini-3.8-flash", "medium"),
         ("gemini-3.5-flash-lite", "medium"),
     ]
+
+
+def test_analyzeQualitativePrompt_enforcesFivePointManagementScale(service, mocker_genai_client):
+    mock_response = MagicMock()
+    mock_response.text = '{"management": {"ceo_employee_rating": 4.2, "employee_happiness_score": 4.0}}'
+    mocker_genai_client.models.generate_content.return_value = mock_response
+
+    service.analyze_qualitative("Apple", {"name": "Apple Inc."}, {"pe": 25.0})
+
+    sent_prompt = mocker_genai_client.models.generate_content.call_args.kwargs["contents"]
+    assert "0.0 to 5.0" in sent_prompt
+
+
+def test_fetchEmployeeSentiment_enablesGoogleSearchAndExtractsGroundingMetadata(service, mocker_genai_client):
+    chunk1 = MagicMock()
+    chunk1.web.title = "Glassdoor - Apple Reviews"
+    chunk1.web.uri = "https://www.glassdoor.com/Overview/Working-at-Apple-EI_IE1138.htm"
+    chunk2 = MagicMock()
+    chunk2.web.title = "Duplicate Glassdoor"
+    chunk2.web.uri = "https://www.glassdoor.com/Overview/Working-at-Apple-EI_IE1138.htm"
+    chunk3 = MagicMock()
+    chunk3.web.title = "Comparably - Apple CEO"
+    chunk3.web.uri = "https://www.comparably.com/companies/apple"
+
+    grounding_metadata = MagicMock()
+    grounding_metadata.grounding_chunks = [chunk1, chunk2, chunk3]
+    grounding_metadata.web_search_queries = ["Apple Glassdoor rating CEO approval"]
+
+    candidate = MagicMock()
+    candidate.grounding_metadata = grounding_metadata
+
+    mock_response = MagicMock()
+    mock_response.candidates = [candidate]
+    mock_response.text = (
+        'Here are the results:\n```json\n'
+        '{"ceo_name": "Tim Cook", "ceo_tenure_years": 15, "ceo_approval_pct": 91, '
+        '"ceo_employee_rating": 4.6, "employee_happiness_score": 4.2, '
+        '"review_count": "45,000+ reviews", "source_platform": "Glassdoor", '
+        '"notes": "Glassdoor shows 4.2/5 overall and 91% CEO approval."}\n```'
+    )
+    mocker_genai_client.models.generate_content.return_value = mock_response
+
+    result = service.fetch_employee_sentiment("Apple Inc.", "AAPL")
+
+    assert result["ceo_name"] == "Tim Cook"
+    assert result["ceo_approval_pct"] == 91
+    assert result["ceo_employee_rating"] == 4.6
+    assert result["employee_happiness_score"] == 4.2
+    assert result["grounded"] is True
+    assert result["search_queries"] == ["Apple Glassdoor rating CEO approval"]
+    assert len(result["grounding_sources"]) == 2
+    assert result["grounding_sources"][0]["title"] == "Glassdoor - Apple Reviews"
+
+    call_kwargs = mocker_genai_client.models.generate_content.call_args.kwargs
+    assert call_kwargs["model"] == "gemini-3.8-flash"
+    config = call_kwargs["config"]
+    assert config.response_mime_type is None
+    assert config.tools is not None and len(config.tools) == 1
+    assert config.tools[0].google_search is not None
+    assert _extract_thinking_level(config) == "medium"
+
+
+def test_fetchEmployeeSentimentFallbackOrder_triesAllModels(service, mocker_genai_client):
+    mocker_genai_client.models.generate_content.side_effect = Exception("Grounding quota exceeded")
+
+    result = service.fetch_employee_sentiment("Apple Inc.", "AAPL")
+
+    assert "error" in result
+    called_models = [
+        (call.kwargs["model"], _extract_thinking_level(call.kwargs["config"]))
+        for call in mocker_genai_client.models.generate_content.call_args_list
+    ]
+    assert called_models == [
+        ("gemini-3.8-flash", "medium"),
+        ("gemini-3.5-flash-lite", "medium"),
+        ("gemini-4-hydrogen", "high"),
+    ]

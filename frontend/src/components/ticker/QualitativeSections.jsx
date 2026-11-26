@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   Building2,
   Briefcase,
+  Globe,
+  RefreshCw,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -220,10 +222,62 @@ export function StrategyAndRisks({ report }) {
   );
 }
 
-export function ManagementAndHealth({ report }) {
+function normalizeRatingOutOf5(val) {
+  if (val === null || val === undefined || val === '' || typeof val === 'boolean') return null;
+  const raw =
+    typeof val === 'number'
+      ? val
+      : Number.parseFloat(String(val).replace(/[%,\s]/g, '').split('/')[0]);
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  let scaled;
+  if (raw <= 5) scaled = raw;
+  else if (raw <= 10) scaled = (raw / 10) * 5;
+  else if (raw <= 100) scaled = (raw / 100) * 5;
+  else scaled = 5;
+  return Number(Math.min(5, Math.max(0, scaled)).toFixed(1));
+}
+
+function formatHostname(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+export function ManagementAndHealth({
+  report,
+  employeeSentiment = null,
+  loadingSentiment = false,
+  onRefreshSentiment = null,
+}) {
   const mgmt = report.qualitative?.management || {};
   const raw = report.financials?.raw_data || {};
   const derived = report.financials?.derived_metrics || {};
+
+  const ceoName = employeeSentiment?.ceo_name || mgmt.ceo_name || null;
+  const ceoTenure =
+    employeeSentiment?.ceo_tenure_years ?? mgmt.ceo_tenure_years ?? null;
+  const ceoApprovalPct =
+    employeeSentiment?.ceo_approval_pct ?? mgmt.ceo_approval_pct ?? null;
+  const ceoRating = normalizeRatingOutOf5(
+    employeeSentiment?.ceo_employee_rating ?? mgmt.ceo_employee_rating
+  );
+  const empSentiment = normalizeRatingOutOf5(
+    employeeSentiment?.employee_happiness_score ?? mgmt.employee_happiness_score
+  );
+  const reviewCount = employeeSentiment?.review_count || mgmt.review_count || null;
+  const sentimentSource =
+    employeeSentiment?.source_platform || mgmt.sentiment_source || null;
+  const sentimentNotes = employeeSentiment?.notes || mgmt.sentiment_notes || null;
+  const sentimentSources = (
+    Array.isArray(employeeSentiment?.grounding_sources)
+      ? employeeSentiment.grounding_sources
+      : Array.isArray(mgmt.sentiment_sources)
+        ? mgmt.sentiment_sources
+        : []
+  ).filter((src) => typeof src?.url === 'string' && /^https?:\/\//i.test(src.url));
+  const isGrounded = Boolean(employeeSentiment?.grounded ?? mgmt.sentiment_grounded);
 
   const debtPayoffYears = derived.debt_payoff_years;
   const debtHealthy = debtPayoffYears !== undefined && debtPayoffYears <= 3;
@@ -266,49 +320,151 @@ export function ManagementAndHealth({ report }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Leadership */}
         <div className="p-4 rounded-lg bg-subtle/60 border border-line space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
-            Executive Leadership
-          </h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+              Executive Leadership
+            </h3>
+            <div className="flex items-center gap-1.5">
+              {loadingSentiment ? (
+                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-brand-soft text-brand animate-pulse">
+                  Searching…
+                </span>
+              ) : isGrounded ? (
+                <span
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                  title="Grounded via live Google Search"
+                >
+                  <Globe className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+                  <span>
+                    {sentimentSource && sentimentSource.toLowerCase() !== 'unavailable'
+                      ? sentimentSource
+                      : 'Search Grounded'}
+                  </span>
+                </span>
+              ) : (ceoRating !== null || empSentiment !== null) ? (
+                <span
+                  className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-surface text-ink-muted border border-line"
+                  title="Estimated from qualitative analysis; refresh to query live Google Search"
+                >
+                  AI Estimate
+                </span>
+              ) : null}
+
+              {onRefreshSentiment && (
+                <button
+                  type="button"
+                  onClick={onRefreshSentiment}
+                  disabled={loadingSentiment}
+                  title="Refresh CEO & employee sentiment via Google Search"
+                  aria-label="Refresh CEO and employee sentiment via Google Search"
+                  className="inline-flex items-center justify-center p-1 rounded bg-surface hover:bg-brand-soft text-ink-muted hover:text-brand border border-line transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed no-print"
+                >
+                  <RefreshCw
+                    className={`w-3 h-3 ${loadingSentiment ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+              )}
+            </div>
+          </div>
           <div className="space-y-2.5 text-sm">
+            {ceoName && (
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-ink-secondary">CEO</span>
+                <span className="font-semibold text-ink text-right truncate" title={ceoName}>
+                  {ceoName}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-ink-secondary">CEO Tenure</span>
               <span className="font-mono font-semibold text-ink num">
-                {mgmt.ceo_tenure_years ?? '—'} yrs
+                {ceoTenure !== null && ceoTenure !== undefined ? `${ceoTenure} yrs` : '—'}
               </span>
             </div>
             <div className="space-y-1">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-ink-secondary">CEO Rating</span>
                 <span className="font-mono font-semibold text-ink num">
-                  {mgmt.ceo_employee_rating ?? '—'} / 5.0
+                  {ceoRating !== null ? `${ceoRating.toFixed(1)} / 5.0` : '—'}
+                  {ceoApprovalPct !== null && (
+                    <span className="ml-1.5 text-xs font-normal text-ink-muted">
+                      ({ceoApprovalPct}% approval)
+                    </span>
+                  )}
                 </span>
               </div>
-              {mgmt.ceo_employee_rating > 0 && (
-                <div className="h-1.5 w-full rounded-full bg-line overflow-hidden">
+              {ceoRating !== null && (
+                <div
+                  role="progressbar"
+                  aria-label="CEO Rating"
+                  aria-valuemin={0}
+                  aria-valuemax={5}
+                  aria-valuenow={ceoRating}
+                  className="h-1.5 w-full rounded-full bg-line overflow-hidden"
+                >
                   <div
-                    style={{ width: `${Math.min(100, (mgmt.ceo_employee_rating / 5) * 100)}%` }}
+                    style={{ width: `${Math.min(100, (ceoRating / 5) * 100)}%` }}
                     className="h-full bg-brand rounded-full"
                   />
                 </div>
               )}
             </div>
             <div className="space-y-1">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-ink-secondary">Employee Sentiment</span>
                 <span className="font-mono font-semibold text-ink num">
-                  {mgmt.employee_happiness_score ?? '—'} / 5.0
+                  {empSentiment !== null ? `${empSentiment.toFixed(1)} / 5.0` : '—'}
                 </span>
               </div>
-              {mgmt.employee_happiness_score > 0 && (
-                <div className="h-1.5 w-full rounded-full bg-line overflow-hidden">
+              {empSentiment !== null && (
+                <div
+                  role="progressbar"
+                  aria-label="Employee Sentiment"
+                  aria-valuemin={0}
+                  aria-valuemax={5}
+                  aria-valuenow={empSentiment}
+                  className="h-1.5 w-full rounded-full bg-line overflow-hidden"
+                >
                   <div
-                    style={{ width: `${Math.min(100, (mgmt.employee_happiness_score / 5) * 100)}%` }}
+                    style={{ width: `${Math.min(100, (empSentiment / 5) * 100)}%` }}
                     className="h-full bg-emerald-500 rounded-full"
                   />
                 </div>
               )}
             </div>
           </div>
+
+          {(sentimentNotes || reviewCount || sentimentSources.length > 0) && (
+            <div className="pt-2.5 border-t border-line space-y-1.5">
+              {(sentimentNotes || reviewCount) && (
+                <p className="text-[11px] text-ink-muted leading-snug">
+                  {sentimentNotes || `Based on ${reviewCount}`}
+                </p>
+              )}
+              {sentimentSources.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {sentimentSources.slice(0, 3).map((src, idx) => (
+                    <a
+                      key={src.url || idx}
+                      href={src.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface hover:bg-brand-soft text-[11px] font-medium text-ink-secondary hover:text-brand border border-line transition-colors"
+                      title={src.title || src.url}
+                    >
+                      <span className="truncate max-w-[120px]">
+                        {src.title && src.title !== src.url
+                          ? src.title
+                          : formatHostname(src.url)}
+                      </span>
+                      <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" aria-hidden="true" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Debt Status */}

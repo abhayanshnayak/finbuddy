@@ -38,6 +38,11 @@ function hasBusinessModelData(bm) {
   );
 }
 
+function hasGroundedSentimentData(mgmt) {
+  if (!mgmt || typeof mgmt !== 'object') return false;
+  return Boolean(mgmt.sentiment_generated_at || mgmt.sentiment_grounded);
+}
+
 function ReportSkeleton({ symbol }) {
   return (
     <div className="space-y-6 animate-pulse" aria-busy="true" aria-label={`Loading ${symbol} report`}>
@@ -103,6 +108,12 @@ export default function SingleTickerTab() {
     data: null,
     loading: false,
     error: '',
+  });
+
+  const [sentimentState, setSentimentState] = useState({
+    symbol: '',
+    data: null,
+    loading: false,
   });
 
   const [auditOpen, setAuditOpen] = useState(false);
@@ -178,6 +189,37 @@ export default function SingleTickerTab() {
     }
   }, []);
 
+  const fetchEmployeeSentiment = useCallback(async (tickerSym, forceFresh, signal) => {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    try {
+      const response = await fetch(
+        `${apiBase}/api/stocks/${encodeURIComponent(tickerSym)}/employee-sentiment?force_fresh=${forceFresh}`,
+        { signal }
+      );
+      if (signal?.aborted) return;
+      if (response.ok) {
+        const data = await response.json();
+        if (!signal?.aborted) {
+          setSentimentState({ symbol: tickerSym, data, loading: false });
+        }
+      } else {
+        setSentimentState((prev) => ({
+          symbol: tickerSym,
+          data: prev.symbol === tickerSym ? prev.data : null,
+          loading: false,
+        }));
+      }
+    } catch {
+      if (!signal?.aborted) {
+        setSentimentState((prev) => ({
+          symbol: tickerSym,
+          data: prev.symbol === tickerSym ? prev.data : null,
+          loading: false,
+        }));
+      }
+    }
+  }, []);
+
   // Load report on route symbol change using AbortController (no synchronous setState inside effect)
   useEffect(() => {
     if (!normalizedSymbol) return undefined;
@@ -226,6 +268,13 @@ export default function SingleTickerTab() {
           setBusinessModelState({ symbol: resolvedSym, data: null, loading: true, error: '' });
           fetchBusinessModel(resolvedSym, false, controller.signal);
         }
+
+        if (hasGroundedSentimentData(data.qualitative?.management)) {
+          setSentimentState({ symbol: resolvedSym, data: null, loading: false });
+        } else {
+          setSentimentState({ symbol: resolvedSym, data: null, loading: true });
+          fetchEmployeeSentiment(resolvedSym, false, controller.signal);
+        }
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
@@ -238,7 +287,13 @@ export default function SingleTickerTab() {
       });
 
     return () => controller.abort();
-  }, [normalizedSymbol, fetchGrowthAnalysis, fetchBusinessModel, recordRecentTicker]);
+  }, [
+    normalizedSymbol,
+    fetchGrowthAnalysis,
+    fetchBusinessModel,
+    fetchEmployeeSentiment,
+    recordRecentTicker,
+  ]);
 
   // Explicit user-triggered Force Fresh Refresh (does not run on checkbox toggle)
   const handleForceRefresh = useCallback(async () => {
@@ -288,6 +343,13 @@ export default function SingleTickerTab() {
         followUps.push(fetchBusinessModel(resolvedSym, true));
       }
 
+      if (hasGroundedSentimentData(data.qualitative?.management)) {
+        setSentimentState({ symbol: resolvedSym, data: null, loading: false });
+      } else {
+        setSentimentState({ symbol: resolvedSym, data: null, loading: true });
+        followUps.push(fetchEmployeeSentiment(resolvedSym, true));
+      }
+
       await Promise.all(followUps);
     } catch (err) {
       setReportState((prev) => ({
@@ -297,7 +359,14 @@ export default function SingleTickerTab() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [normalizedSymbol, fetchGrowthAnalysis, fetchBusinessModel, recordRecentTicker, refreshCompanies]);
+  }, [
+    normalizedSymbol,
+    fetchGrowthAnalysis,
+    fetchBusinessModel,
+    fetchEmployeeSentiment,
+    recordRecentTicker,
+    refreshCompanies,
+  ]);
 
   const isCurrentSymbolLoaded = reportState.symbol === normalizedSymbol;
   const loading = Boolean(normalizedSymbol) && !isCurrentSymbolLoaded;
@@ -326,6 +395,21 @@ export default function SingleTickerTab() {
     setBusinessModelState({ symbol: activeResolvedSym, data: null, loading: true, error: '' });
     fetchBusinessModel(activeResolvedSym, true);
   }, [activeResolvedSym, fetchBusinessModel]);
+
+  const employeeSentiment =
+    sentimentState.symbol === activeResolvedSym ? sentimentState.data : null;
+  const loadingSentiment =
+    Boolean(report) && sentimentState.symbol === activeResolvedSym && sentimentState.loading;
+
+  const handleRefreshSentiment = useCallback(() => {
+    if (!activeResolvedSym) return;
+    setSentimentState((prev) => ({
+      symbol: activeResolvedSym,
+      data: prev.symbol === activeResolvedSym ? prev.data : null,
+      loading: true,
+    }));
+    fetchEmployeeSentiment(activeResolvedSym, true);
+  }, [activeResolvedSym, fetchEmployeeSentiment]);
 
   // Dynamic document title
   useEffect(() => {
@@ -531,7 +615,12 @@ export default function SingleTickerTab() {
           <StrategyAndRisks report={report} />
 
           {/* 8. Management Quality, Debt & ROIC/ROE Chart */}
-          <ManagementAndHealth report={report} />
+          <ManagementAndHealth
+            report={report}
+            employeeSentiment={employeeSentiment}
+            loadingSentiment={loadingSentiment}
+            onRefreshSentiment={handleRefreshSentiment}
+          />
 
           {/* 9. AI Growth Company Analysis */}
           <GrowthCompanyAnalysisSection
