@@ -399,3 +399,89 @@ def test_extractKeyMetricsIncludeTtmTrue_attachesQuarterlyTtmAndHandlesErrorsGra
     assert result["ttm"]["book_value"]["period_type"] == "MRQ"
 
 
+def test_computeXbrlTtmFcfAndRevGrowthYoy_computesMatchedTtmMetrics(client):
+    annual_reports = [
+        {
+            "year": 2024,
+            "quarter": 0,
+            "startDate": "2024-01-01",
+            "endDate": "2024-12-31",
+            "report": {
+                "ic": [{"concept": "us-gaap_Revenues", "value": 100e9}],
+                "cf": [],
+                "bs": [],
+            },
+        },
+        {
+            "year": 2025,
+            "quarter": 0,
+            "startDate": "2025-01-01",
+            "endDate": "2025-12-31",
+            "report": {
+                "ic": [{"concept": "us-gaap_Revenues", "value": 120e9}],
+                "cf": [
+                    {"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": 40e9},
+                    {"concept": "us-gaap_PaymentsToAcquirePropertyPlantAndEquipment", "value": 10e9},
+                ],
+                "bs": [],
+            },
+        },
+    ]
+    quarterly_reports = [
+        {
+            "year": 2024,
+            "quarter": 2,
+            "startDate": "2024-01-01",
+            "endDate": "2024-06-30",
+            "report": {
+                "ic": [{"concept": "us-gaap_Revenues", "value": 48e9}],
+                "cf": [],
+                "bs": [],
+            },
+        },
+        {
+            "year": 2025,
+            "quarter": 2,
+            "startDate": "2025-01-01",
+            "endDate": "2025-06-30",
+            "report": {
+                "ic": [{"concept": "us-gaap_Revenues", "value": 58e9}],
+                "cf": [
+                    {"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": 18e9},
+                    {"concept": "us-gaap_PaymentsToAcquirePropertyPlantAndEquipment", "value": -4e9},
+                ],
+                "bs": [],
+            },
+        },
+        {
+            "year": 2026,
+            "quarter": 2,
+            "startDate": "2026-01-01",
+            "endDate": "2026-06-30",
+            "report": {
+                "ic": [{"concept": "us-gaap_Revenues", "value": 70e9}],
+                "cf": [
+                    {"concept": "us-gaap_NetCashProvidedByUsedInOperatingActivities", "value": 24e9},
+                    {"concept": "us-gaap_PaymentsToAcquirePropertyPlantAndEquipment", "value": 7e9},
+                ],
+                "bs": [],
+            },
+        },
+    ]
+
+    ttm = client.compute_xbrl_ttm(annual_reports, quarterly_reports)
+
+    # Current TTM Rev = 120 + 70 - 58 = 132B; Prior TTM Rev = 100 + 58 - 48 = 110B -> +20%
+    assert ttm["revenue"]["value"] == pytest.approx(132e9)
+    assert ttm["revenue_growth_yoy"]["value"] == pytest.approx(0.20)
+    assert ttm["revenue_growth_yoy"]["period"] == "2026-06-30"
+    assert ttm["revenue_growth_yoy"]["source"] == "xbrl_quarterly"
+
+    # OCF TTM = 40 + 24 - 18 = 46B; CapEx TTM = |10| + |7| - |-4| = 13B -> FCF TTM = 33B
+    assert ttm["operating_cash_flow"]["value"] == pytest.approx(46e9)
+    assert ttm["free_cash_flow"]["value"] == pytest.approx(33e9)
+    assert ttm["free_cash_flow"]["period"] == "2026-06-30"
+    assert ttm["free_cash_flow"]["source"] == "xbrl_quarterly"
+
+
+

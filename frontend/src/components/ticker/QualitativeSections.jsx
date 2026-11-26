@@ -280,7 +280,17 @@ export function ManagementAndHealth({
   const isGrounded = Boolean(employeeSentiment?.grounded ?? mgmt.sentiment_grounded);
 
   const debtPayoffYears = derived.debt_payoff_years;
-  const debtHealthy = debtPayoffYears !== undefined && debtPayoffYears <= 3;
+  const debtDetails = derived.computation_debt_payoff_details || {};
+  const debtIsTtm = debtDetails.basis === 'TTM';
+  const debtFcfLabel = debtDetails.period_label || (debtIsTtm ? 'TTM' : 'FY');
+  const debtFcfUsed = debtDetails.fcf_used;
+  const hasDebtWithNegativeFcf =
+    Number(raw.total_debt) > 0 &&
+    debtFcfUsed !== undefined &&
+    debtFcfUsed !== null &&
+    Number(debtFcfUsed) <= 0;
+  const debtHealthy =
+    !hasDebtWithNegativeFcf && debtPayoffYears !== undefined && debtPayoffYears <= 3;
 
   const returnsSeries = useMemo(
     () => normalizeReturnSeries(raw.roic_history, raw.roe_history),
@@ -469,19 +479,25 @@ export function ManagementAndHealth({
 
         {/* Debt Status */}
         <div className="p-4 rounded-lg bg-subtle/60 border border-line space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               Balance Sheet &amp; Debt
             </h3>
             {debtPayoffYears !== undefined && (
               <span
                 className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                  debtHealthy
-                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                  hasDebtWithNegativeFcf
+                    ? 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                    : debtHealthy
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
                 }`}
               >
-                {debtHealthy ? 'Healthy (≤3Y)' : 'Elevated (>3Y)'}
+                {hasDebtWithNegativeFcf
+                  ? 'Neg. FCF'
+                  : debtHealthy
+                    ? 'Healthy (≤3Y)'
+                    : 'Elevated (>3Y)'}
               </span>
             )}
           </div>
@@ -498,17 +514,50 @@ export function ManagementAndHealth({
                 ${formatLargeNumber(raw.cash_and_equivalents)}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-ink-secondary">Years to Payoff (FCF)</span>
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-ink-secondary inline-flex items-center gap-1.5">
+                <span>Years to Payoff</span>
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                    debtIsTtm
+                      ? 'bg-sky-500/10 border-sky-500/25 text-sky-700 dark:text-sky-300'
+                      : 'bg-surface border-line text-ink-muted'
+                  }`}
+                >
+                  {debtIsTtm ? 'TTM FCF' : `${debtFcfLabel} FCF`}
+                </span>
+              </span>
               <span
                 className={`font-mono font-bold num ${
-                  debtHealthy ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+                  hasDebtWithNegativeFcf
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : debtHealthy
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-amber-600 dark:text-amber-400'
                 }`}
               >
-                {debtPayoffYears !== undefined ? `${debtPayoffYears.toFixed(1)} yrs` : '—'}
+                {hasDebtWithNegativeFcf
+                  ? 'N/A'
+                  : debtPayoffYears !== undefined
+                    ? `${debtPayoffYears.toFixed(1)} yrs`
+                    : '—'}
               </span>
             </div>
           </div>
+          {debtFcfUsed !== undefined && debtFcfUsed !== null && (
+            <div className="pt-2 border-t border-line flex items-center justify-between gap-2 text-[11px] text-ink-muted font-mono num">
+              <span>{debtFcfLabel} FCF</span>
+              <span
+                className={
+                  Number(debtFcfUsed) < 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-ink-secondary'
+                }
+              >
+                {Number(debtFcfUsed) < 0
+                  ? `−$${formatLargeNumber(Math.abs(debtFcfUsed))}`
+                  : `$${formatLargeNumber(debtFcfUsed)}`}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Capital Efficiency Table */}

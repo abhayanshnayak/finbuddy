@@ -19,6 +19,15 @@ class FinnhubClient:
             "us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
         ]),
     }
+    CAPEX_CONCEPTS = (
+        "cf",
+        [
+            "us-gaap_PaymentsForPropertyPlantAndEquipment",
+            "us-gaap_PaymentsToAcquirePropertyPlantAndEquipment",
+            "us-gaap_PaymentsForPropertyPlantAndEquipmentContinuingOperations",
+            "us-gaap_PaymentsToAcquirePropertyPlantAndEquipmentContinuingOperations",
+        ],
+    )
 
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -145,6 +154,26 @@ class FinnhubClient:
                         "period_type": "MRQ" if metric_key == "book_value" else "TTM",
                         "source": "xbrl_annual",
                     }
+            # Free Cash Flow (TTM) = OCF - |CapEx|
+            capex_val = self._get_opt_val(rep, *self.CAPEX_CONCEPTS)
+            if "operating_cash_flow" in ttm and capex_val is not None:
+                ttm["free_cash_flow"] = {
+                    "value": ttm["operating_cash_flow"]["value"] - abs(capex_val),
+                    "period": period_str,
+                    "period_type": "TTM",
+                    "source": "xbrl_annual",
+                }
+            # TTM YoY Revenue Growth = FY(Y) / FY(Y-1) - 1
+            prior_annual = annual_by_year.get(latest_annual["year"] - 1)
+            if "revenue" in ttm and prior_annual is not None:
+                prev_rev = self._get_opt_val(prior_annual.get("report") or {}, *self.BIG4_CONCEPTS["revenue"])
+                if prev_rev is not None and prev_rev > 0:
+                    ttm["revenue_growth_yoy"] = {
+                        "value": (ttm["revenue"]["value"] / prev_rev) - 1.0,
+                        "period": period_str,
+                        "period_type": "TTM",
+                        "source": "xbrl_annual",
+                    }
             return ttm
 
         if latest_q is None:
@@ -193,6 +222,48 @@ class FinnhubClient:
                         "source": "xbrl_quarterly",
                     }
 
+            # Free Cash Flow (TTM) = OCF_TTM - CapEx_TTM (normalize CapEx sign per filing)
+            cap_ann = self._get_opt_val(ann_rep, *self.CAPEX_CONCEPTS)
+            cap_curr = self._get_opt_val(curr_rep, *self.CAPEX_CONCEPTS)
+            cap_prev = self._get_opt_val(prev_rep, *self.CAPEX_CONCEPTS)
+            if (
+                "operating_cash_flow" in ttm
+                and cap_ann is not None
+                and cap_curr is not None
+                and cap_prev is not None
+            ):
+                capex_ttm = abs(cap_ann) + abs(cap_curr) - abs(cap_prev)
+                ttm["free_cash_flow"] = {
+                    "value": ttm["operating_cash_flow"]["value"] - capex_ttm,
+                    "period": period_str,
+                    "period_type": "TTM",
+                    "source": "xbrl_quarterly",
+                }
+
+            # Matched TTM-vs-prior-TTM YoY Revenue Growth:
+            # Prior TTM = Annual(Y-2) + YTD(Y-1, q) - YTD(Y-2, q)
+            prev2_annual = annual_by_year.get(q_year - 2)
+            prev2_q = quarterly_by_key.get((q_year - 2, q_num))
+            if (
+                "revenue" in ttm
+                and prev2_annual is not None
+                and prev2_q is not None
+                and is_ytd_filing(prev2_q, q_num)
+            ):
+                rev_sec, rev_tags = self.BIG4_CONCEPTS["revenue"]
+                r_ann2 = self._get_opt_val(prev2_annual.get("report") or {}, rev_sec, rev_tags)
+                r_prev = self._get_opt_val(prev_rep, rev_sec, rev_tags)
+                r_prev2 = self._get_opt_val(prev2_q.get("report") or {}, rev_sec, rev_tags)
+                if r_ann2 is not None and r_prev is not None and r_prev2 is not None:
+                    prior_ttm_rev = r_ann2 + r_prev - r_prev2
+                    if prior_ttm_rev > 0:
+                        ttm["revenue_growth_yoy"] = {
+                            "value": (ttm["revenue"]["value"] / prior_ttm_rev) - 1.0,
+                            "period": period_str,
+                            "period_type": "TTM",
+                            "source": "xbrl_quarterly",
+                        }
+
         # Book Value (MRQ): point-in-time balance sheet snapshot from latest 10-Q
         bv_section, bv_tags = self.BIG4_CONCEPTS["book_value"]
         bv_val = self._get_opt_val(latest_q.get("report") or {}, bv_section, bv_tags)
@@ -238,7 +309,7 @@ class FinnhubClient:
             ocf = get_val(report, *self.BIG4_CONCEPTS["operating_cash_flow"])
             equity = get_val(report, *self.BIG4_CONCEPTS["book_value"])
             eps = get_val(report, "ic", ["us-gaap_EarningsPerShareDiluted", "us-gaap_EarningsPerShareBasic"])
-            capex = get_val(report, "cf", ["us-gaap_PaymentsForPropertyPlantAndEquipment", "us-gaap_PaymentsToAcquirePropertyPlantAndEquipment", "us-gaap_PaymentsForPropertyPlantAndEquipmentContinuingOperations", "us-gaap_PaymentsToAcquirePropertyPlantAndEquipmentContinuingOperations"])
+            capex = get_val(report, *self.CAPEX_CONCEPTS)
             da = get_val(report, "cf", ["us-gaap_DepreciationDepletionAndAmortization", "us-gaap_DepreciationDepletionAndAmortizationContinuingOperations", "us-gaap_DepreciationAndAmortization", "us-gaap_Depreciation", "us-gaap_DepreciationAmortizationAndAccretionNet"])
 
             # Non-Cash Working Capital (Balance Sheet):

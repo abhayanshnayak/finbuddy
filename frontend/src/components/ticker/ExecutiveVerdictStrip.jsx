@@ -38,6 +38,7 @@ export default function ExecutiveVerdictStrip({ report }) {
   const capRate = Number(valuations.cap_rate) || 0;
   const paybackYears = Number(valuations.payback_time_years) || 0;
   const paybackPass = paybackYears > 0 && paybackYears <= 8;
+  const paybackFcfLabel = valuations.payback_fcf_label || (valuations.payback_fcf_basis === 'TTM' ? 'TTM' : 'FY');
   const ownersPass = Boolean(valuations.computation_owners_value_details?.is_undervalued);
 
   const mosDelta = computeValuationDelta(mosPrice, currentPrice);
@@ -49,6 +50,7 @@ export default function ExecutiveVerdictStrip({ report }) {
 
   const quadrant = report.qualitative?.competitors?.market_structure_verdict?.quadrant;
   const ruleOf40 = derived.rule_of_40;
+  const ruleOf40IsTtm = derived.computation_rule_of_40_details?.basis === 'TTM';
 
   // Build horizontal price ladder markers when at least currentPrice and 1 valuation exist
   const ladderPoints = [
@@ -151,8 +153,8 @@ export default function ExecutiveVerdictStrip({ report }) {
 
           <p className="text-xs text-ink-secondary">
             {paybackYears > 0
-              ? `Cumulative FCF recovers Market Cap in Year ${paybackYears}`
-              : '10Y projected FCF does not recover current Market Cap'}
+              ? `Cumulative FCF (${paybackFcfLabel} base) recovers Market Cap in Year ${paybackYears}`
+              : `10Y projected FCF (${paybackFcfLabel} base) does not recover current Market Cap`}
           </p>
         </div>
 
@@ -230,7 +232,7 @@ export default function ExecutiveVerdictStrip({ report }) {
 
           <div className="flex items-center justify-between text-xs text-ink-secondary pt-0.5">
             <span>
-              Rule of 40:{' '}
+              Rule of 40{ruleOf40IsTtm ? ' (TTM)' : ''}:{' '}
               <strong
                 className={`font-mono num ${
                   ruleOf40 >= 40

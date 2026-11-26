@@ -54,13 +54,21 @@ export default function ValuationSuite({ report, onOpenAudit }) {
   const [simPe, setSimPe] = useState(defaultPe);
   const [simMarrPct, setSimMarrPct] = useState(defaultMarrPct);
 
-  // Latest FCF derived from Rule of 40 details or projected year 1 back-calc
+  // Starting FCF for What-If sensitivity workbench (prefers TTM FCF when available)
   const latestFcf =
+    valuations.payback_starting_fcf ??
     derived.computation_rule_of_40_details?.latest_fcf ??
     (valuations.projected_fcf_per_year?.[0]
       ? valuations.projected_fcf_per_year[0].fcf /
         (1 + (valuations.projected_fcf_per_year[0].growth_rate ?? valuations.windage_growth_rate_used ?? 0))
       : 0);
+  const paybackFcfBasis = valuations.payback_fcf_basis || 'FY';
+  const paybackIsTtm = paybackFcfBasis === 'TTM';
+  const paybackFcfLabel = valuations.payback_fcf_label || (paybackIsTtm ? 'TTM' : 'FY');
+
+  const r40Details = derived.computation_rule_of_40_details;
+  const r40IsTtm = r40Details?.basis === 'TTM';
+  const r40Label = r40Details?.latest_year || (r40IsTtm ? 'TTM' : 'FY');
 
   const currentEps = mosDetails?.current_eps ?? 0;
   const sharesOut = ownersValueDetails?.shares_outstanding ?? 0;
@@ -288,6 +296,9 @@ export default function ValuationSuite({ report, onOpenAudit }) {
                       : '10+ Years'
                     : 'N/A'}
                 </span>
+                <span className="text-xs text-ink-muted block mt-1 font-mono num">
+                  Base: {paybackFcfLabel} FCF
+                </span>
               </div>
 
               <div className="p-3.5 rounded-lg bg-subtle border border-line">
@@ -498,9 +509,20 @@ export default function ValuationSuite({ report, onOpenAudit }) {
             {/* Key Value Block */}
             <div className="p-4 rounded-lg bg-subtle border border-line flex items-center justify-between gap-3">
               <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-ink-muted block">
-                  Principal Recovery
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                    Principal Recovery
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                      paybackIsTtm
+                        ? 'bg-sky-500/10 border-sky-500/25 text-sky-700 dark:text-sky-300'
+                        : 'bg-surface border-line text-ink-muted'
+                    }`}
+                  >
+                    {paybackFcfLabel} FCF
+                  </span>
+                </div>
                 <span className="text-3xl font-bold font-mono text-brand num">
                   {valuations.payback_time_years > 0
                     ? `${valuations.payback_time_years} Yrs`
@@ -527,8 +549,10 @@ export default function ValuationSuite({ report, onOpenAudit }) {
             {paybackChartData.length > 0 ? (
               paybackView === 'chart' ? (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs text-ink-muted">
-                    <span>10Y Annual &amp; Cumulative FCF</span>
+                  <div className="flex flex-wrap items-center justify-between gap-1 text-xs text-ink-muted">
+                    <span className="font-mono num">
+                      Start FCF ({paybackFcfLabel}): {formatSignedCurrency(latestFcf)}
+                    </span>
                     <span className="font-mono num">
                       Mkt Cap: ${formatLargeNumber(marketCap)}
                     </span>
@@ -648,7 +672,7 @@ export default function ValuationSuite({ report, onOpenAudit }) {
               )
             ) : (
               <div className="p-4 rounded-lg bg-subtle/60 border border-line text-xs text-ink-muted">
-                Current Free Cash Flow is zero or negative; a positive FCF payback projection cannot be computed.
+                {paybackFcfLabel} Free Cash Flow ({formatSignedCurrency(latestFcf)}) is zero or negative; a positive FCF payback projection cannot be computed.
               </div>
             )}
           </div>
@@ -801,13 +825,24 @@ export default function ValuationSuite({ report, onOpenAudit }) {
         <div className="bg-surface border border-line rounded-xl p-5 flex flex-col justify-between gap-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-ink inline-flex items-center gap-1.5">
-                <span>
-                  Rule of 40 ({derived.computation_rule_of_40_details?.latest_year || 'TTM'})
+              <h3 className="text-sm font-bold text-ink inline-flex flex-wrap items-center gap-1.5">
+                <span>Rule of 40</span>
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold border ${
+                    r40IsTtm
+                      ? 'bg-sky-500/10 border-sky-500/25 text-sky-700 dark:text-sky-300'
+                      : 'bg-subtle border-line text-ink-muted'
+                  }`}
+                >
+                  {r40IsTtm ? r40Label : `FY ${r40Label}`}
                 </span>
                 <InfoTooltip term="ruleOf40" />
               </h3>
-              <p className="text-xs text-ink-muted mt-0.5">1Y Revenue Growth + FCF Margin</p>
+              <p className="text-xs text-ink-muted mt-0.5">
+                {r40IsTtm
+                  ? 'TTM YoY Revenue Growth + TTM FCF Margin'
+                  : '1Y Revenue Growth + FCF Margin'}
+              </p>
             </div>
             <div className="text-right">
               <span
@@ -825,19 +860,17 @@ export default function ValuationSuite({ report, onOpenAudit }) {
             </div>
           </div>
 
-          {derived.computation_rule_of_40_details && (
+          {r40Details && (
             <div className="p-3 rounded-lg bg-subtle/70 border border-line text-xs space-y-1">
-              <p className="text-ink-secondary">
-                {derived.computation_rule_of_40_details.explanation}
-              </p>
+              <p className="text-ink-secondary">{r40Details.explanation}</p>
               <p className="font-mono text-ink num">
-                {formatPercent(derived.computation_rule_of_40_details.revenue_growth_1yr, 1)}{' '}
+                {formatPercent(r40Details.revenue_growth_1yr, 1)}{' '}
                 <span className="text-ink-muted">
-                  (Rev ${formatLargeNumber(derived.computation_rule_of_40_details.latest_revenue)})
+                  ({r40IsTtm ? 'TTM ' : ''}Rev {formatSignedCurrency(r40Details.latest_revenue)})
                 </span>{' '}
-                + {formatPercent(derived.computation_rule_of_40_details.fcf_margin, 1)}{' '}
+                + {formatPercent(r40Details.fcf_margin, 1)}{' '}
                 <span className="text-ink-muted">
-                  (FCF ${formatLargeNumber(derived.computation_rule_of_40_details.latest_fcf)})
+                  ({r40IsTtm ? 'TTM ' : ''}FCF {formatSignedCurrency(r40Details.latest_fcf)})
                 </span>
               </p>
             </div>

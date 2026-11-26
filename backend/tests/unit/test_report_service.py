@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 from app.services.report_service import (
     compute_report_from_raw,
     compute_big4_ttm,
+    compute_ttm_cash_flow_and_growth,
     build_growth_analysis_context,
     build_business_model_context,
     generate_and_cache_report,
@@ -675,6 +676,137 @@ def test_computeBig4TtmReconciliation_prefersNewerMetricsAndDirectXbrlWhenSamePe
     assert same_period_ttm["operating_cash_flow"]["value"] == pytest.approx(-2.629e9)
     assert same_period_ttm["book_value"]["source"] == "finnhub_metrics"
     assert same_period_ttm["book_value"]["value"] == pytest.approx(613.601e9)
+
+
+def test_computeReportFromRawTtmMetrics_drivesRuleOf40DebtPayoffAndPaybackFromTtm(calculator):
+    raw_data = {
+        "ticker": "NVDA",
+        "profile": {"name": "NVIDIA Corp", "shareOutstanding": 24100},
+        "metrics": {
+            "metric": {
+                "marketCapitalization": 3025273.0,
+                "psTTM": 8.3616,
+                "pfcfShareTTM": 20.3417,
+                "revenueGrowthTTMYoy": 93.33,
+                "epsBasicExclExtraItemsTTM": 9.3,
+                "peExclExtraTTM": 13.37,
+            },
+            "series": {
+                "quarterly": {
+                    "eps": [{"period": "2026-10-25", "v": 2.8}],
+                    "fcfPerShareTTM": [{"period": "2026-10-25", "v": 6.1711}],
+                },
+                "annual": {"pe": [{"period": "2026", "v": 30.0}]},
+            },
+        },
+        "financials": {
+            "latest_cash": 40e9,
+            "latest_total_debt": 10e9,
+            "history": {
+                "revenue": [
+                    {"year": 2025, "value": 130.5e9},
+                    {"year": 2026, "value": 215.9e9},
+                ],
+                "operating_cash_flow": [
+                    {"year": 2025, "value": 64.1e9},
+                    {"year": 2026, "value": 102.7e9},
+                ],
+                "capex": [
+                    {"year": 2025, "value": -3.2e9},
+                    {"year": 2026, "value": -5.0e9},
+                ],
+                "net_income": [
+                    {"year": 2025, "value": 72.9e9},
+                    {"year": 2026, "value": 120.1e9},
+                ],
+            },
+        },
+        "price_at_storage": 125.53,
+    }
+
+    report = compute_report_from_raw(raw_data, calculator)
+    derived = report["financials"]["derived_metrics"]
+    vals = report["financials"]["valuations"]
+
+    expected_ttm_fcf = 3025273.0 * 1e6 / 20.3417
+    expected_ttm_rev = 3025273.0 * 1e6 / 8.3616
+
+    # 1. Payback Time starts from TTM FCF (~$148.7B, not FY26 ~$97.7B)
+    assert vals["payback_fcf_basis"] == "TTM"
+    assert vals["payback_fcf_label"] == "TTM (Oct 2026)"
+    assert vals["payback_starting_fcf"] == pytest.approx(expected_ttm_fcf, rel=1e-4)
+    assert "TTM (Oct 2026)" in vals["computation_payback_details"]
+    yr1_rate = vals["projected_fcf_per_year"][0]["growth_rate"]
+    assert vals["projected_fcf_per_year"][0]["fcf"] == pytest.approx(expected_ttm_fcf * (1 + yr1_rate), rel=1e-4)
+
+    # 2. Debt Payoff Years uses Total Debt / TTM FCF
+    assert derived["debt_payoff_years"] == pytest.approx(10e9 / expected_ttm_fcf, rel=1e-4)
+    assert "TTM (Oct 2026)" in derived["computation_debt_payoff"]
+    assert derived["computation_debt_payoff_details"]["basis"] == "TTM"
+    assert derived["computation_debt_payoff_details"]["fcf_used"] == pytest.approx(expected_ttm_fcf, rel=1e-4)
+
+    # 3. Rule of 40 uses TTM YoY Rev Growth + TTM FCF Margin
+    r40 = derived["computation_rule_of_40_details"]
+    assert r40["basis"] == "TTM"
+    assert r40["latest_year"] == "TTM (Oct 2026)"
+    assert r40["revenue_growth_1yr"] == pytest.approx(0.9333)
+    assert r40["latest_revenue"] == pytest.approx(expected_ttm_rev, rel=1e-4)
+    assert r40["latest_fcf"] == pytest.approx(expected_ttm_fcf, rel=1e-4)
+    expected_r40 = (0.9333 + expected_ttm_fcf / expected_ttm_rev) * 100.0
+    assert derived["rule_of_40"] == pytest.approx(expected_r40, rel=1e-3)
+
+
+def test_computeTtmCashFlowAndGrowthNegativeFcf_rejectsStalePositivePfcfRatio(calculator):
+    # Simulates AMZN Q1 2026 where timestamped fcfPerShareTTM turned negative (-0.2299)
+    # while pfcfShareTTM stayed frozen at a stale positive value (184.47).
+    raw_data = {
+        "ticker": "AMZN",
+        "profile": {"name": "Amazon.com Inc.", "shareOutstanding": 10757.11},
+        "metrics": {
+            "metric": {
+                "marketCapitalization": 2896029.0,
+                "psTTM": 3.8989,
+                "pfcfShareTTM": 184.4722,
+                "revenueGrowthTTMYoy": 14.22,
+            },
+            "series": {
+                "quarterly": {
+                    "eps": [{"period": "2026-03-31", "v": 2.0}],
+                    "fcfPerShareTTM": [{"period": "2026-03-31", "v": -0.2299}],
+                }
+            },
+        },
+        "financials": {
+            "latest_total_debt": 60e9,
+            "history": {
+                "revenue": [{"year": 2024, "value": 638e9}, {"year": 2025, "value": 717e9}],
+                "operating_cash_flow": [{"year": 2025, "value": 139.5e9}],
+                "capex": [{"year": 2025, "value": -83.0e9}],
+            },
+        },
+        "price_at_storage": 269.2,
+    }
+
+    cf_growth = compute_ttm_cash_flow_and_growth(
+        financials=raw_data["financials"],
+        metrics=raw_data["metrics"],
+        effective_shares=10757.11 * 1e6,
+    )
+    assert cf_growth["free_cash_flow"]["value"] < 0
+    assert cf_growth["free_cash_flow"]["value"] == pytest.approx(-0.2299 * 10757.11e6)
+
+    # Must NOT fall back to older positive FY25 FCF when TTM FCF is known negative!
+    report = compute_report_from_raw(raw_data, calculator)
+    vals = report["financials"]["valuations"]
+    derived = report["financials"]["derived_metrics"]
+    assert vals["payback_fcf_basis"] == "TTM"
+    assert vals["payback_starting_fcf"] < 0
+    assert vals["payback_time_years"] == 0
+    assert derived["computation_debt_payoff_details"]["basis"] == "TTM"
+    assert derived["computation_debt_payoff_details"]["fcf_used"] < 0
+    assert derived["computation_rule_of_40_details"]["basis"] == "TTM"
+    assert derived["computation_rule_of_40_details"]["fcf_margin"] < 0
+
 
 
 

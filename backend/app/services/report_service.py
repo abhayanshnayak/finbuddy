@@ -372,6 +372,151 @@ def compute_big4_ttm(
 
     return result
 
+
+_MONTHS_SHORT = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _format_period_short(raw_date: Any) -> str:
+    dt = _parse_iso_date(raw_date)
+    if dt is None:
+        return ""
+    return f"{_MONTHS_SHORT[dt.month - 1]} {dt.year}"
+
+
+def compute_ttm_cash_flow_and_growth(
+    financials: dict,
+    metrics: dict,
+    effective_shares: float = 0.0,
+) -> Dict[str, Dict[str, Any]]:
+    """Computes TTM Free Cash Flow and TTM YoY Revenue Growth for valuation & health metrics.
+
+    Reconciles direct SEC XBRL quarterly/annual TTM (`financials["ttm"]`) against Finnhub
+    `metrics` derivations (`fcfPerShareTTM`, `pfcfShareTTM`, `currentEv/freeCashFlowTTM`,
+    and `revenueGrowthTTMYoy`). Guards against stale positive `pfcfShareTTM` ratios when
+    timestamped `fcfPerShareTTM` indicates FCF has turned negative.
+    """
+    xbrl_ttm = (financials or {}).get("ttm") or {}
+    metric_dict = (metrics or {}).get("metric") or {}
+    series_quarterly = ((metrics or {}).get("series") or {}).get("quarterly") or {}
+
+    latest_flow_dt: Optional[date] = None
+    latest_flow_period: Optional[str] = None
+    for series_key in ("eps", "salesPerShare", "netMargin", "ev", "fcfPerShareTTM"):
+        for item in series_quarterly.get(series_key) or []:
+            dt = _parse_iso_date(item.get("period"))
+            if dt and (latest_flow_dt is None or dt > latest_flow_dt):
+                latest_flow_dt = dt
+                latest_flow_period = dt.isoformat()
+
+    mc_millions = _to_positive_float(metric_dict.get("marketCapitalization"))
+    mc_dollars = mc_millions * 1_000_000.0 if mc_millions is not None else None
+    ev_millions = _to_positive_float(metric_dict.get("enterpriseValue"))
+    ev_dollars = ev_millions * 1_000_000.0 if ev_millions is not None else None
+    shares = effective_shares if (effective_shares and effective_shares > 0) else 0.0
+
+    metrics_candidates: Dict[str, Dict[str, Any]] = {}
+
+    # 1. TTM Free Cash Flow from Finnhub metrics
+    fcf_ps_dt: Optional[date] = None
+    fcf_ps_val: Optional[float] = None
+    for item in series_quarterly.get("fcfPerShareTTM") or []:
+        dt = _parse_iso_date(item.get("period"))
+        v_num = _to_finite_float(item.get("v"))
+        if dt is not None and v_num is not None and (fcf_ps_dt is None or dt > fcf_ps_dt):
+            fcf_ps_dt = dt
+            fcf_ps_val = v_num
+
+    fcf_ps_stale = (
+        fcf_ps_dt is not None
+        and latest_flow_dt is not None
+        and (latest_flow_dt - fcf_ps_dt).days > 200
+    )
+
+    pfcf_ttm = _to_positive_float(metric_dict.get("pfcfShareTTM"))
+    ev_fcf_ttm = _to_positive_float(metric_dict.get("currentEv/freeCashFlowTTM"))
+    fcf_from_pfcf = (mc_dollars / pfcf_ttm) if (mc_dollars is not None and pfcf_ttm is not None) else None
+    fcf_from_ev = (ev_dollars / ev_fcf_ttm) if (ev_dollars is not None and ev_fcf_ttm is not None) else None
+
+    fcf_val: Optional[float] = None
+    fcf_period: Optional[str] = latest_flow_period
+
+    if fcf_ps_val is not None and not fcf_ps_stale:
+        fcf_period = fcf_ps_dt.isoformat() if fcf_ps_dt else latest_flow_period
+        fcf_from_ps = (fcf_ps_val * shares) if shares > 0 else None
+        if fcf_ps_val <= 0:
+            # Timestamped FCF per share is non-positive; never trust a stale positive P/FCF ratio.
+            fcf_val = fcf_from_ps
+        else:
+            if fcf_from_pfcf is not None and (
+                fcf_from_ps is None
+                or abs(fcf_from_pfcf - fcf_from_ps) / max(abs(fcf_from_ps), 1.0) <= 0.25
+            ):
+                fcf_val = fcf_from_pfcf
+            elif fcf_from_ps is not None:
+                fcf_val = fcf_from_ps
+            elif fcf_from_ev is not None:
+                fcf_val = fcf_from_ev
+    else:
+        if fcf_from_pfcf is not None:
+            fcf_val = fcf_from_pfcf
+        elif fcf_from_ev is not None:
+            fcf_val = fcf_from_ev
+
+    if fcf_val is not None:
+        metrics_candidates["free_cash_flow"] = {
+            "value": fcf_val,
+            "period": fcf_period,
+            "period_type": "TTM",
+            "source": "finnhub_metrics",
+        }
+
+    # 2. TTM YoY Revenue Growth from Finnhub metrics (stored in percent, e.g. 12.76 -> 0.1276)
+    rev_gr_pct = _to_finite_float(metric_dict.get("revenueGrowthTTMYoy"))
+    if rev_gr_pct is not None:
+        metrics_candidates["revenue_growth_yoy"] = {
+            "value": rev_gr_pct / 100.0,
+            "period": latest_flow_period,
+            "period_type": "TTM",
+            "source": "finnhub_metrics",
+        }
+
+    result: Dict[str, Dict[str, Any]] = {}
+    for metric_key in ("free_cash_flow", "revenue_growth_yoy"):
+        raw_x = xbrl_ttm.get(metric_key)
+        x_entry = None
+        if isinstance(raw_x, dict):
+            x_val = _to_finite_float(raw_x.get("value"))
+            if x_val is not None:
+                x_entry = {
+                    "value": x_val,
+                    "period": raw_x.get("period"),
+                    "period_type": raw_x.get("period_type") or "TTM",
+                    "source": raw_x.get("source") or "xbrl_quarterly",
+                }
+
+        m_entry = metrics_candidates.get(metric_key)
+
+        if x_entry and m_entry:
+            x_dt = _parse_iso_date(x_entry.get("period"))
+            m_dt = _parse_iso_date(m_entry.get("period"))
+            if x_dt and m_dt and (m_dt - x_dt).days > 15:
+                result[metric_key] = m_entry
+            else:
+                result[metric_key] = x_entry
+        elif x_entry:
+            result[metric_key] = x_entry
+        elif m_entry:
+            result[metric_key] = m_entry
+        else:
+            result[metric_key] = {
+                "value": None,
+                "period": None,
+                "period_type": "TTM",
+                "source": "unavailable",
+            }
+
+    return result
+
 def build_growth_analysis_context(ticker: str, name: str, financials: dict, metrics: dict, profile: dict, current_price: float) -> dict:
     history = financials.get("history", {})
     ocf_list = history.get("operating_cash_flow", [])
@@ -478,6 +623,11 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
         "operating_cash_flow": list(calc.calculate_growth_rates(history.get("operating_cash_flow", [])).values())
     }
     big4_ttm = compute_big4_ttm(
+        financials=financials,
+        metrics=metrics,
+        effective_shares=effective_shares,
+    )
+    ttm_cf_growth = compute_ttm_cash_flow_and_growth(
         financials=financials,
         metrics=metrics,
         effective_shares=effective_shares,
@@ -590,8 +740,23 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     latest_wc_change = latest_wc_entry.get("value", 0.0) if latest_wc_entry else 0.0
     latest_wc_source = latest_wc_entry.get("source", "balance_sheet") if latest_wc_entry else "unavailable"
     latest_capex = capex_list[-1]["value"] if capex_list else 0
-    latest_fcf = ocf_list[-1]["value"] - abs(latest_capex) if ocf_list else 0
-    latest_fcf_year = ocf_list[-1]["year"] if ocf_list else "TTM"
+    annual_latest_fcf = ocf_list[-1]["value"] - abs(latest_capex) if ocf_list else 0
+    annual_latest_fcf_year = ocf_list[-1]["year"] if ocf_list else None
+
+    ttm_fcf_entry = ttm_cf_growth.get("free_cash_flow") or {}
+    if ttm_fcf_entry.get("value") is not None:
+        latest_fcf = ttm_fcf_entry["value"]
+        fcf_basis = "TTM"
+        fcf_period = ttm_fcf_entry.get("period")
+        fcf_short = _format_period_short(fcf_period)
+        latest_fcf_year = f"TTM ({fcf_short})" if fcf_short else "TTM"
+        fcf_source = ttm_fcf_entry.get("source", "finnhub_metrics")
+    else:
+        latest_fcf = annual_latest_fcf
+        fcf_basis = "FY"
+        fcf_period = str(annual_latest_fcf_year) if annual_latest_fcf_year is not None else None
+        latest_fcf_year = f"FY {annual_latest_fcf_year}" if annual_latest_fcf_year is not None else "FY"
+        fcf_source = "xbrl_annual"
 
     series_annual = metrics.get("series", {}).get("annual", {})
     roe_history = list(reversed(series_annual.get("roe", [])))
@@ -607,24 +772,52 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
     roe_averages = calc.calculate_averages(roe_history)
     roic_averages = calc.calculate_averages(roic_history)
 
-    # Rule of 40 and EV/Revenue
+    # Annual revenue & 1Y growth (used for EV/Revenue and as fallback for Rule of 40)
     if len(rev_list) >= 2 and rev_list[-2]["value"] > 0:
-        latest_revenue = rev_list[-1]["value"]
-        latest_revenue_year = rev_list[-1]["year"]
+        annual_latest_revenue = rev_list[-1]["value"]
+        annual_latest_revenue_year = rev_list[-1]["year"]
         previous_revenue = rev_list[-2]["value"]
-        revenue_growth_1yr = (latest_revenue / previous_revenue) - 1
+        annual_revenue_growth_1yr = (annual_latest_revenue / previous_revenue) - 1
     else:
-        latest_revenue = rev_list[-1]["value"] if len(rev_list) >= 1 else 0
-        latest_revenue_year = rev_list[-1]["year"] if len(rev_list) >= 1 else "TTM"
-        revenue_growth_1yr = 0.0
+        annual_latest_revenue = rev_list[-1]["value"] if len(rev_list) >= 1 else 0
+        annual_latest_revenue_year = rev_list[-1]["year"] if len(rev_list) >= 1 else "TTM"
+        annual_revenue_growth_1yr = 0.0
 
-    fcf_margin = latest_fcf / latest_revenue if latest_revenue > 0 else 0.0
-    rule_of_40 = (revenue_growth_1yr + fcf_margin) * 100
+    # Rule of 40: prefer period-consistent TTM inputs (TTM YoY Rev Growth + TTM FCF / TTM Rev)
+    ttm_rev_entry = big4_ttm.get("revenue") or {}
+    ttm_rev_gr_entry = ttm_cf_growth.get("revenue_growth_yoy") or {}
+    if (
+        ttm_rev_entry.get("value") is not None
+        and ttm_rev_entry["value"] > 0
+        and ttm_fcf_entry.get("value") is not None
+        and ttm_rev_gr_entry.get("value") is not None
+    ):
+        r40_revenue = ttm_rev_entry["value"]
+        r40_fcf = ttm_fcf_entry["value"]
+        r40_rev_growth = ttm_rev_gr_entry["value"]
+        r40_basis = "TTM"
+        r40_period = (
+            ttm_rev_entry.get("period")
+            or ttm_fcf_entry.get("period")
+            or ttm_rev_gr_entry.get("period")
+        )
+        r40_short = _format_period_short(r40_period)
+        r40_label = f"TTM ({r40_short})" if r40_short else "TTM"
+    else:
+        r40_revenue = annual_latest_revenue
+        r40_fcf = annual_latest_fcf
+        r40_rev_growth = annual_revenue_growth_1yr
+        r40_basis = "FY"
+        r40_period = str(annual_latest_revenue_year) if annual_latest_revenue_year is not None else None
+        r40_label = str(annual_latest_revenue_year)
+
+    fcf_margin = r40_fcf / r40_revenue if r40_revenue > 0 else 0.0
+    rule_of_40 = (r40_rev_growth + fcf_margin) * 100
 
     cash_and_equivalents = financials.get("latest_cash", 0)
     total_debt = financials.get("latest_total_debt", 0)
     enterprise_value = market_cap + total_debt - cash_and_equivalents
-    ev_to_revenue = enterprise_value / latest_revenue if latest_revenue > 0 else 0.0
+    ev_to_revenue = enterprise_value / annual_latest_revenue if annual_latest_revenue > 0 else 0.0
 
     owner_earnings, cap_rate, cap_rationale, owners_value_details = calc.calculate_10_cap(
         latest_net_income,
@@ -686,22 +879,32 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
                 "windage_growth_rate": windage_gr,
                 "computation_windage": windage_rationale,
                 "computation_windage_details": computation_windage_details,
-                "debt_payoff_years": financials.get("latest_total_debt", 0) / latest_fcf if latest_fcf > 0 else 0,
-                "computation_debt_payoff": f"Total Debt / Current Annual FCF",
+                "debt_payoff_years": total_debt / latest_fcf if latest_fcf > 0 else 0,
+                "computation_debt_payoff": f"Total Debt / {latest_fcf_year} FCF",
+                "computation_debt_payoff_details": {
+                    "total_debt": total_debt,
+                    "fcf_used": latest_fcf,
+                    "basis": fcf_basis,
+                    "period": fcf_period,
+                    "period_label": latest_fcf_year,
+                    "source": fcf_source,
+                },
                 "rule_of_40": rule_of_40,
                 "computation_rule_of_40_details": {
-                    "revenue_growth_1yr": revenue_growth_1yr,
+                    "revenue_growth_1yr": r40_rev_growth,
                     "fcf_margin": fcf_margin,
-                    "latest_revenue": latest_revenue,
-                    "latest_fcf": latest_fcf,
-                    "latest_year": str(latest_revenue_year),
+                    "latest_revenue": r40_revenue,
+                    "latest_fcf": r40_fcf,
+                    "latest_year": r40_label,
+                    "basis": r40_basis,
+                    "period": r40_period,
                     "explanation": "Score > 40 indicates a healthy balance of growth and profitability."
                 },
                 "ev_to_revenue": ev_to_revenue,
                 "computation_ev_to_revenue_details": {
                     "enterprise_value": enterprise_value,
-                    "latest_revenue": latest_revenue,
-                    "latest_year": str(latest_revenue_year),
+                    "latest_revenue": annual_latest_revenue,
+                    "latest_year": str(annual_latest_revenue_year),
                     "explanation": "Measures how much it costs to buy the company's sales."
                 }
             },
@@ -718,6 +921,11 @@ def compute_report_from_raw(raw_data: dict, calc: FinancialCalculator) -> dict:
                 "computation_windage_details": computation_windage_details,
                 "computation_growth_projection": growth_projection,
                 "payback_time_years": payback_years,
+                "payback_starting_fcf": latest_fcf,
+                "payback_fcf_basis": fcf_basis,
+                "payback_fcf_period": fcf_period,
+                "payback_fcf_label": latest_fcf_year,
+                "payback_fcf_source": fcf_source,
                 "projected_fcf_per_year": projected_fcf,
                 "computation_payback_details": payback_rationale,
                 "owner_earnings": owner_earnings,

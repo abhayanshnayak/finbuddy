@@ -163,8 +163,8 @@ export const GLOSSARY = {
   payback: {
     title: 'Payback Time (FCF)',
     summary:
-      'The number of years it takes for cumulative projected Free Cash Flow to equal the company’s entire current Market Capitalization—treating the stock like buying a private business outright.',
-    formula: 'First Year where Σ Projected FCF ≥ Market Cap',
+      'The number of years it takes for cumulative projected Free Cash Flow—starting from TTM FCF (falling back to latest FY if unavailable)—to equal the company’s entire current Market Capitalization, treating the stock like buying a private business outright.',
+    formula: 'First Year where Σ Projected FCF (from TTM FCF base) ≥ Market Cap',
     benchmark: 'Pass: ≤ 8 Years · Reasonable: ≤ 10 Years',
   },
   ownersValue: {
@@ -184,8 +184,8 @@ export const GLOSSARY = {
   ruleOf40: {
     title: 'Rule of 40',
     summary:
-      'Balances top-line expansion against cash generation by adding latest-year Revenue Growth Rate (%) and Free Cash Flow Margin (%).',
-    formula: 'Rule of 40 = 1Y Revenue Growth % + FCF Margin %',
+      'Balances top-line expansion against cash generation by adding TTM YoY Revenue Growth (%) and TTM Free Cash Flow Margin (%) — falling back to latest annual FY filings when TTM inputs are unavailable.',
+    formula: 'Rule of 40 = TTM YoY Revenue Growth % + (TTM FCF ÷ TTM Revenue) %',
     benchmark: 'Pass: ≥ 40 indicates strong growth-profitability balance',
   },
   evToRevenue: {
