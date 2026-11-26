@@ -112,6 +112,123 @@
   overflow: visible;
 }
 
+/* Native modal dialog scroll containment and top-layer animations */
+dialog.sc-dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog.sc-dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgb(2 6 23 / 0);
+  backdrop-filter: blur(0px);
+  transition-property: background-color, backdrop-filter, display, overlay;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-out;
+  transition-behavior: allow-discrete;
+}
+
+dialog.sc-dialog {
+  opacity: 0;
+  transition-property: opacity, transform, display, overlay;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-out;
+  transition-behavior: allow-discrete;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog.sc-dialog {
+    transform: scale(0.96) translateY(4px);
+  }
+}
+
+dialog.sc-dialog[open]:where(:not([data-closing])) {
+  opacity: 1;
+}
+
+@starting-style {
+  dialog.sc-dialog[open]:where(:not([data-closing])) {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog.sc-dialog[open]:where(:not([data-closing])) {
+    transform: scale(1) translateY(0);
+  }
+
+  @starting-style {
+    dialog.sc-dialog[open]:where(:not([data-closing])) {
+      transform: scale(0.96) translateY(4px);
+    }
+  }
+}
+
+dialog.sc-dialog[open]:where(:not([data-closing]))::backdrop {
+  background-color: rgb(2 6 23 / 0.6);
+  backdrop-filter: blur(4px);
+}
+
+@starting-style {
+  dialog.sc-dialog[open]:where(:not([data-closing]))::backdrop {
+    background-color: rgb(2 6 23 / 0);
+    backdrop-filter: blur(0px);
+  }
+}
+
+/* Native account popover panel (anchored progressively with @supports) */
+@supports not selector(:popover-open) {
+  [popover].sc-account-popover:not(.\:popover-open) {
+    display: none;
+  }
+}
+
+[popover].sc-account-popover {
+  opacity: 0;
+  transition-property: opacity, transform, display, overlay;
+  transition-duration: 0.16s;
+  transition-timing-function: ease-out;
+  transition-behavior: allow-discrete;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [popover].sc-account-popover {
+    transform: scale(0.97) translateY(4px);
+  }
+}
+
+[popover].sc-account-popover:is(:popover-open, .\:popover-open) {
+  display: block;
+  opacity: 1;
+}
+
+@starting-style {
+  [popover].sc-account-popover:popover-open {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [popover].sc-account-popover:is(:popover-open, .\:popover-open) {
+    transform: scale(1) translateY(0);
+  }
+
+  @starting-style {
+    [popover].sc-account-popover:popover-open {
+      transform: scale(0.97) translateY(4px);
+    }
+  }
+}
+
+@supports (position-area: block-start) {
+  [popover].sc-account-popover {
+    inset: auto;
+    margin: 0 0 8px 0;
+    position-area: block-start span-inline-end;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -120,6 +237,12 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  dialog.sc-dialog,
+  dialog.sc-dialog::backdrop,
+  [popover].sc-account-popover {
+    transition-duration: 0.1s !important;
   }
 }
 

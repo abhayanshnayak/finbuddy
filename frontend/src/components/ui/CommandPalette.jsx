@@ -13,12 +13,16 @@ import {
   Sparkles,
   Clock,
   X,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import { useCompanies } from '../../context/companiesStore';
+import { useAuth } from '../../context/authStore';
 
 function CommandPaletteDialog({ onClose, theme, toggleTheme }) {
   const navigate = useNavigate();
   const { companies, recentTickers } = useCompanies();
+  const { user, openSignInModal, signOut } = useAuth();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
@@ -138,6 +142,23 @@ function CommandPaletteDialog({ onClose, theme, toggleTheme }) {
         icon: theme === 'dark' ? Sun : Moon,
         action: () => toggleTheme(),
       },
+      user
+        ? {
+            id: 'act-signout',
+            group: 'Account',
+            title: `Sign out (${user.displayName})`,
+            subtitle: `Signed in via ${user.providerLabel}`,
+            icon: LogOut,
+            action: () => signOut(),
+          }
+        : {
+            id: 'act-signin',
+            group: 'Account',
+            title: 'Sign in with Google or Facebook',
+            subtitle: 'Optional sign-in for upcoming personalized features',
+            icon: LogIn,
+            action: () => openSignInModal(),
+          },
     ];
 
     navActions.forEach((act) => {
@@ -151,7 +172,7 @@ function CommandPaletteDialog({ onClose, theme, toggleTheme }) {
     });
 
     return list;
-  }, [query, companies, recentTickers, navigate, theme, toggleTheme]);
+  }, [query, companies, recentTickers, navigate, theme, toggleTheme, user, openSignInModal, signOut]);
 
   const runAction = (item) => {
     if (!item) return;

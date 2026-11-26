@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     FINNHUB_API_KEY: str
     GCP_PROJECT_ID: str
+    FIREBASE_PROJECT_ID: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
 
     # Security Configuration

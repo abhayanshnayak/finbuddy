@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import AuthProvider from './context/AuthProvider';
 import CompaniesProvider from './context/CompaniesProvider';
 import AppShell from './components/AppShell';
 import WorkspaceHome from './components/WorkspaceHome';
@@ -54,21 +55,23 @@ function App() {
 
   return (
     <HashRouter>
-      <CompaniesProvider>
-        <AppShell theme={theme} toggleTheme={toggleTheme}>
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/" element={<WorkspaceHome />} />
-              <Route path="/ticker" element={<SingleTickerTab />} />
-              <Route path="/ticker/:symbol" element={<SingleTickerTab />} />
-              <Route path="/screener" element={<TagSearchTab />} />
-              <Route path="/ingest" element={<BulkIngestionTab />} />
-              <Route path="/terms" element={<TermsOfService />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </AppShell>
-      </CompaniesProvider>
+      <AuthProvider>
+        <CompaniesProvider>
+          <AppShell theme={theme} toggleTheme={toggleTheme}>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<WorkspaceHome />} />
+                <Route path="/ticker" element={<SingleTickerTab />} />
+                <Route path="/ticker/:symbol" element={<SingleTickerTab />} />
+                <Route path="/screener" element={<TagSearchTab />} />
+                <Route path="/ingest" element={<BulkIngestionTab />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </AppShell>
+        </CompaniesProvider>
+      </AuthProvider>
     </HashRouter>
   );
 }

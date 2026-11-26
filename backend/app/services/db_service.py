@@ -139,3 +139,38 @@ class DBService:
             update_in_transaction(transaction, batch_ref)
         except Exception as e:
             print(f"Transaction failed for batch {batch_id}, ticker {ticker}: {e}")
+
+    def upsert_user_profile(self, uid: str, profile: dict) -> dict:
+        if not self.db or not uid:
+            return profile
+        try:
+            now_iso = datetime.now(pytz.utc).isoformat()
+            user_ref = self.db.collection("users").document(uid)
+            existing = user_ref.get()
+            record = {
+                "uid": uid,
+                "name": profile.get("name"),
+                "email": profile.get("email"),
+                "picture": profile.get("picture"),
+                "provider": profile.get("provider"),
+                "email_verified": bool(profile.get("email_verified", False)),
+                "last_login_at": now_iso,
+            }
+            if not existing.exists:
+                record["created_at"] = now_iso
+            user_ref.set(record, merge=True)
+            return record
+        except Exception as e:
+            print(f"Firestore upsert user profile failed for {uid}: {e}")
+            return profile
+
+    def get_user_profile(self, uid: str) -> dict:
+        if not self.db or not uid:
+            return {}
+        try:
+            doc = self.db.collection("users").document(uid).get()
+            if doc.exists:
+                return doc.to_dict()
+        except Exception as e:
+            print(f"Firestore get user profile failed for {uid}: {e}")
+        return {}

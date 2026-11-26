@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import ThemeToggle from './ui/ThemeToggle';
 import CommandPalette from './ui/CommandPalette';
+import SidebarUserSection from './auth/SidebarUserSection';
 import { useCompanies } from '../context/companiesStore';
 
 const NAV_ITEMS = [
@@ -159,24 +160,27 @@ export default function AppShell({ theme, toggleTheme, children }) {
           })}
         </nav>
 
-        {/* Sidebar Footer */}
-        <div className="p-2.5 border-t border-line space-y-1">
-          <NavLink
-            to="/terms"
-            title={sidebarCollapsed ? 'Terms & Disclaimer' : undefined}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg text-xs font-medium transition-colors ${
-                sidebarCollapsed ? 'justify-center p-2.5' : 'px-3 py-2'
-              } ${
-                isActive
-                  ? 'bg-brand-soft text-brand font-semibold'
-                  : 'text-ink-muted hover:bg-subtle hover:text-ink'
-              }`
-            }
-          >
-            <FileText className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-            {!sidebarCollapsed && <span className="truncate">Terms &amp; Disclaimer</span>}
-          </NavLink>
+        {/* Sidebar Footer: Account & Legal */}
+        <div className="p-2.5 border-t border-line space-y-2">
+          <SidebarUserSection collapsed={sidebarCollapsed} />
+          <div className="pt-1 border-t border-line/70">
+            <NavLink
+              to="/terms"
+              title={sidebarCollapsed ? 'Terms & Disclaimer' : undefined}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-lg text-xs font-medium transition-colors ${
+                  sidebarCollapsed ? 'justify-center p-2.5' : 'px-3 py-2'
+                } ${
+                  isActive
+                    ? 'bg-brand-soft text-brand font-semibold'
+                    : 'text-ink-muted hover:bg-subtle hover:text-ink'
+                }`
+              }
+            >
+              <FileText className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              {!sidebarCollapsed && <span className="truncate">Terms &amp; Disclaimer</span>}
+            </NavLink>
+          </div>
         </div>
       </aside>
 
@@ -233,21 +237,24 @@ export default function AppShell({ theme, toggleTheme, children }) {
                 );
               })}
             </nav>
-            <div className="p-3 border-t border-line">
-              <NavLink
-                to="/terms"
-                onClick={() => setMobileNavOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium ${
-                    isActive
-                      ? 'bg-brand-soft text-brand font-semibold'
-                      : 'text-ink-muted hover:bg-subtle hover:text-ink'
-                  }`
-                }
-              >
-                <FileText className="w-4 h-4" />
-                <span>Terms &amp; Disclaimer</span>
-              </NavLink>
+            <div className="p-3 border-t border-line space-y-2">
+              <SidebarUserSection collapsed={false} onAction={() => setMobileNavOpen(false)} />
+              <div className="pt-1 border-t border-line/70">
+                <NavLink
+                  to="/terms"
+                  onClick={() => setMobileNavOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium ${
+                      isActive
+                        ? 'bg-brand-soft text-brand font-semibold'
+                        : 'text-ink-muted hover:bg-subtle hover:text-ink'
+                    }`
+                  }
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Terms &amp; Disclaimer</span>
+                </NavLink>
+              </div>
             </div>
           </aside>
         </div>
