@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "build:frontend": "npm --prefix frontend run build",
+    "deploy:hosting": "npm --prefix frontend run build && npx -y firebase-tools@latest deploy --only hosting"
+  },
   "dependencies": {
     "puppeteer": "^24.43.1"
   }
