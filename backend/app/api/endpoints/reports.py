@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 @router.get("/stocks/{ticker}/employee-sentiment")
-async def get_employee_sentiment(ticker: str, force_fresh: bool = False):
+def get_employee_sentiment(ticker: str, force_fresh: bool = False):
     """
     Fetches Google-Search-grounded employee sentiment and CEO approval ratings from the database.
     If not cached or force_fresh is true, queries Gemini with Google Search grounding, normalizes
@@ -61,7 +61,7 @@ async def get_employee_sentiment(ticker: str, force_fresh: bool = False):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stocks/{ticker}/business-model")
-async def get_business_model_analysis(ticker: str, force_fresh: bool = False):
+def get_business_model_analysis(ticker: str, force_fresh: bool = False):
     """
     Fetches the business model, unit economics, and earnings divisions breakdown from the database.
     If not found or force_fresh is true, synthesizes it via Gemini, caches it in Firestore, and returns it.
@@ -113,7 +113,7 @@ async def get_business_model_analysis(ticker: str, force_fresh: bool = False):
 
 
 @router.get("/stocks/{ticker}/growth-analysis")
-async def get_growth_analysis(ticker: str, force_fresh: bool = False):
+def get_growth_analysis(ticker: str, force_fresh: bool = False):
     """
     Fetches the growth company analysis from the database.
     If not found or force_fresh is true, it gathers financial context, generates the analysis using Gemini,

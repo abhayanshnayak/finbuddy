@@ -38,7 +38,10 @@ class FinnhubClient:
         self.base_url = "https://finnhub.io/api/v1"
 
     def get_profile(self, symbol: str) -> Dict[str, Any]:
-        res = requests.get(f"{self.base_url}/stock/profile2?symbol={symbol}&token={self.api_key}")
+        res = requests.get(
+            f"{self.base_url}/stock/profile2?symbol={symbol}&token={self.api_key}",
+            timeout=15,
+        )
         res.raise_for_status()
         return res.json()
 
@@ -51,12 +54,18 @@ class FinnhubClient:
         return res.json()
 
     def get_metrics(self, symbol: str) -> Dict[str, Any]:
-        res = requests.get(f"{self.base_url}/stock/metric?symbol={symbol}&metric=all&token={self.api_key}")
+        res = requests.get(
+            f"{self.base_url}/stock/metric?symbol={symbol}&metric=all&token={self.api_key}",
+            timeout=15,
+        )
         res.raise_for_status()
         return res.json()
 
     def get_financials_reported(self, symbol: str, freq: str = "annual") -> List[Dict[str, Any]]:
-        res = requests.get(f"{self.base_url}/stock/financials-reported?symbol={symbol}&freq={freq}&token={self.api_key}")
+        res = requests.get(
+            f"{self.base_url}/stock/financials-reported?symbol={symbol}&freq={freq}&token={self.api_key}",
+            timeout=20,
+        )
         res.raise_for_status()
         data = res.json()
         return data.get("data", [])

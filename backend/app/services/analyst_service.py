@@ -47,7 +47,10 @@ class AnalystService:
                 print("Error: GEMINI_API_KEY is missing! Please configure it in backend/.env")
                 self.client = None
             else:
-                self.client = genai.Client(api_key=api_key)
+                self.client = genai.Client(
+                    api_key=api_key,
+                    http_options=types.HttpOptions(timeout=45_000),
+                )
         except Exception as e:
             print(f"Warning: Failed to initialize AI Studio: {e}")
             self.client = None
@@ -77,11 +80,12 @@ class AnalystService:
                 # google-genai<=1.47.0 (Python 3.9) predates the thinking_level SDK field;
                 # pass generationConfig.thinkingConfig.thinkingLevel via extra_body.
                 config_kwargs["http_options"] = types.HttpOptions(
+                    timeout=45_000,
                     extra_body={
                         "generationConfig": {
                             "thinkingConfig": {"thinkingLevel": thinking_level}
                         }
-                    }
+                    },
                 )
 
         return types.GenerateContentConfig(**config_kwargs)

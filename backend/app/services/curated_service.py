@@ -37,6 +37,7 @@ from app.services.report_service import (
 
 CURATED_CACHE_SCHEMA_VERSION = 1
 MEMORY_CACHE_TTL_SECONDS = 6 * 3600  # 6 hours in-process
+LIST_CACHE_TTL_SECONDS = 5 * 60      # 5 minutes in-process catalog summary cache
 FIRESTORE_CACHE_TTL_DAYS = 7         # 7 days persistent cache before background/auto refresh
 TICKER_SNAPSHOT_TTL_DAYS = 7
 
@@ -546,12 +547,14 @@ class CuratedListService:
         self.request_delay_seconds = request_delay_seconds
         self._mem_lock = threading.Lock()
         self._category_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        self._list_cache: Optional[Tuple[float, List[Dict[str, Any]]]] = None
         self._finnhub_lock = threading.Lock()
         self._last_finnhub_call_ts = 0.0
 
     def clear_memory_cache(self) -> None:
         with self._mem_lock:
             self._category_cache.clear()
+            self._list_cache = None
 
     def _pace_finnhub_request(self) -> None:
         if self.request_delay_seconds <= 0:
@@ -717,6 +720,11 @@ class CuratedListService:
 
     def list_categories(self) -> List[Dict[str, Any]]:
         """Lists all <= 10 curated categories with metadata, counts, and cache freshness."""
+        now_mono = time.monotonic()
+        with self._mem_lock:
+            if self._list_cache and (now_mono - self._list_cache[0]) < LIST_CACHE_TTL_SECONDS:
+                return list(self._list_cache[1])
+
         cached_map = self.db.list_curated_categories() if self.db else {}
         summaries: List[Dict[str, Any]] = []
 
@@ -757,6 +765,9 @@ class CuratedListService:
                 "cached_at": cached_doc.get("cached_at") if is_cached else None,
                 "cached_at_pst": cached_doc.get("cached_at_pst") if is_cached else None,
             })
+
+        with self._mem_lock:
+            self._list_cache = (now_mono, summaries)
 
         return summaries
 
@@ -903,5 +914,6 @@ class CuratedListService:
 
         with self._mem_lock:
             self._category_cache[cat_def["id"]] = (time.monotonic(), payload)
+            self._list_cache = None
 
         return payload

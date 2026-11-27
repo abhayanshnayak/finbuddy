@@ -593,6 +593,7 @@ export default function CuratedListsTab() {
     error: '',
   });
   const [refreshingCategory, setRefreshingCategory] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const activeCategoryId = useMemo(() => {
     if (categoryId) return decodeURIComponent(categoryId).toLowerCase();
@@ -606,6 +607,12 @@ export default function CuratedListsTab() {
     categoryState.id === activeCategoryId ? categoryState.error : '';
   const loadingCategory =
     Boolean(activeCategoryId) && !activeData && !categoryError;
+
+  const handleRetryLoad = useCallback(() => {
+    setCatalogError('');
+    setCategoryState({ id: '', data: null, error: '' });
+    setRetryNonce((n) => n + 1);
+  }, []);
 
   // 1. Load catalog metadata of all 10 curated categories
   useEffect(() => {
@@ -631,7 +638,7 @@ export default function CuratedListsTab() {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [retryNonce]);
 
   // 2. Fetch enriched active category on cache miss (zero synchronous setState in effect)
   useEffect(() => {
@@ -673,7 +680,7 @@ export default function CuratedListsTab() {
       });
 
     return () => controller.abort();
-  }, [activeCategoryId]);
+  }, [activeCategoryId, retryNonce]);
 
   // Document title sync
   useEffect(() => {
@@ -821,10 +828,19 @@ export default function CuratedListsTab() {
         {catalogError && (
           <div
             role="alert"
-            className="mx-5 my-4 flex items-center gap-2.5 bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/25 rounded-lg px-4 py-3 text-xs font-semibold"
+            className="mx-5 my-4 flex items-center justify-between gap-3 bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/25 rounded-lg px-4 py-3 text-xs font-semibold"
           >
-            <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-            <span>{catalogError}</span>
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              <span>{catalogError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleRetryLoad}
+              className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors cursor-pointer flex-shrink-0"
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -882,13 +898,22 @@ export default function CuratedListsTab() {
               <p className="text-xs opacity-90 mt-0.5">{categoryError}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/curated/ai-semiconductors')}
-            className="text-xs font-semibold underline cursor-pointer flex-shrink-0"
-          >
-            Open AI &amp; Semis
-          </button>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleRetryLoad}
+              className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/curated/ai-semiconductors')}
+              className="text-xs font-semibold underline cursor-pointer"
+            >
+              Open AI &amp; Semis
+            </button>
+          </div>
         </div>
       )}
 
