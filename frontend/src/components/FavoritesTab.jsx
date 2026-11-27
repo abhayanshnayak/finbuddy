@@ -498,19 +498,20 @@ export default function FavoritesTab() {
   const summary = useMemo(() => {
     let inBuyZoneCount = 0;
     let targetsSetCount = 0;
-    let closestStock = null;
+    let bestValueStock = null;
 
     favorites.forEach((fav) => {
       if (fav.margin_of_safety_price > 0) {
         targetsSetCount += 1;
       }
       const delta = computeFavoriteDelta(fav.current_price, fav.margin_of_safety_price);
-      if (delta) {
-        if (delta.isInBuyZone) {
-          inBuyZoneCount += 1;
-        }
-        if (!closestStock || delta.pct < closestStock.delta.pct) {
-          closestStock = { favorite: fav, delta };
+      if (delta && delta.isInBuyZone) {
+        inBuyZoneCount += 1;
+        if (
+          delta.amount <= 0 &&
+          (!bestValueStock || delta.pct < bestValueStock.delta.pct)
+        ) {
+          bestValueStock = { favorite: fav, delta };
         }
       }
     });
@@ -520,7 +521,7 @@ export default function FavoritesTab() {
       inBuyZoneCount,
       targetsSetCount,
       needsMosCount: favorites.length - targetsSetCount,
-      closestStock,
+      bestValueStock,
     };
   }, [favorites]);
 
@@ -797,35 +798,33 @@ export default function FavoritesTab() {
               <span className="text-xs font-semibold uppercase tracking-wider">Best Value Delta</span>
               <Sparkles className="w-4 h-4 text-brand" aria-hidden="true" />
             </div>
-            {summary.closestStock ? (
+            {summary.bestValueStock ? (
               <>
                 <Link
-                  to={`/ticker/${encodeURIComponent(summary.closestStock.favorite.ticker)}`}
+                  to={`/ticker/${encodeURIComponent(summary.bestValueStock.favorite.ticker)}`}
                   className="inline-flex items-baseline gap-2 group"
                 >
                   <span className="text-2xl font-bold font-mono text-brand group-hover:underline">
-                    {summary.closestStock.favorite.ticker}
+                    {summary.bestValueStock.favorite.ticker}
                   </span>
-                  <span
-                    className={`text-sm font-mono font-bold num ${
-                      summary.closestStock.delta.isInBuyZone
-                        ? 'text-emerald-700 dark:text-emerald-400'
-                        : 'text-amber-700 dark:text-amber-400'
-                    }`}
-                  >
-                    {formatSignedPct(summary.closestStock.delta.pct)}
+                  <span className="text-sm font-mono font-bold num text-emerald-700 dark:text-emerald-400">
+                    {formatSignedPct(summary.bestValueStock.delta.pct)}
                   </span>
                 </Link>
                 <p className="text-xs text-ink-muted mt-0.5 truncate">
-                  {summary.closestStock.delta.isInBuyZone
-                    ? 'Trading inside buy zone'
-                    : 'Closest to your buy target'}
+                  {summary.bestValueStock.delta.isAtTarget
+                    ? 'Trading at your MOS price'
+                    : 'Trading inside buy zone'}
                 </p>
               </>
             ) : (
               <>
                 <p className="text-2xl font-bold font-mono text-ink-muted">—</p>
-                <p className="text-xs text-ink-muted mt-0.5">Add a MOS buy price to compare</p>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  {summary.targetsSetCount === 0
+                    ? 'Add a MOS buy price to compare'
+                    : 'No stocks at or below MOS price'}
+                </p>
               </>
             )}
           </div>

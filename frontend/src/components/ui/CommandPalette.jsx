@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Home,
+  Compass,
   Star,
   LineChart,
   Filter,
@@ -102,6 +103,14 @@ function CommandPaletteDialog({ onClose, theme, toggleTheme }) {
         subtitle: 'Coverage overview & quick research launch',
         icon: Home,
         action: () => navigate('/'),
+      },
+      {
+        id: 'nav-curated',
+        group: 'Navigation',
+        title: 'Curated Thematic Lists',
+        subtitle: '10 supply-chain themes: AI & Semis, Cloud, Robotics, Power, Auto, Utilities, Banks, Healthcare',
+        icon: Compass,
+        action: () => navigate('/curated'),
       },
       {
         id: 'nav-favorites',

@@ -271,3 +271,58 @@ class DBService:
             .delete()
         )
         return True
+
+    def get_curated_category(self, category_id: str) -> dict:
+        if not self.db or not category_id:
+            return {}
+        try:
+            doc = self.db.collection("curated_lists").document(category_id).get()
+            if doc.exists:
+                return doc.to_dict() or {}
+        except Exception as e:
+            print(f"Firestore get curated category failed for {category_id}: {e}")
+        return {}
+
+    def save_curated_category(self, category_id: str, data: dict):
+        if not self.db or not category_id:
+            return
+        try:
+            payload = dict(data)
+            payload["last_updated"] = datetime.now(pytz.utc).isoformat()
+            self.db.collection("curated_lists").document(category_id).set(payload)
+        except Exception as e:
+            print(f"Firestore save curated category failed for {category_id}: {e}")
+
+    def list_curated_categories(self) -> dict:
+        if not self.db:
+            return {}
+        try:
+            result = {}
+            docs = self.db.collection("curated_lists").stream()
+            for doc in docs:
+                result[doc.id] = doc.to_dict() or {}
+            return result
+        except Exception as e:
+            print(f"Firestore list curated categories failed: {e}")
+            return {}
+
+    def get_curated_ticker_snapshot(self, ticker: str) -> dict:
+        if not self.db or not ticker:
+            return {}
+        try:
+            doc = self.db.collection("curated_ticker_snapshots").document(ticker.upper()).get()
+            if doc.exists:
+                return doc.to_dict() or {}
+        except Exception as e:
+            print(f"Firestore get curated ticker snapshot failed for {ticker}: {e}")
+        return {}
+
+    def save_curated_ticker_snapshot(self, ticker: str, data: dict):
+        if not self.db or not ticker:
+            return
+        try:
+            payload = dict(data)
+            payload["last_updated"] = datetime.now(pytz.utc).isoformat()
+            self.db.collection("curated_ticker_snapshots").document(ticker.upper()).set(payload)
+        except Exception as e:
+            print(f"Firestore save curated ticker snapshot failed for {ticker}: {e}")

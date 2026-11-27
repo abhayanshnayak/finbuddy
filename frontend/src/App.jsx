@@ -8,6 +8,7 @@ import WorkspaceHome from './components/WorkspaceHome';
 
 const SingleTickerTab = lazy(() => import('./components/SingleTickerTab'));
 const FavoritesTab = lazy(() => import('./components/FavoritesTab'));
+const CuratedListsTab = lazy(() => import('./components/CuratedListsTab'));
 const BulkIngestionTab = lazy(() => import('./components/BulkIngestionTab'));
 const TagSearchTab = lazy(() => import('./components/TagSearchTab'));
 const TermsOfService = lazy(() => import('./components/TermsOfService'));
@@ -64,6 +65,8 @@ function App() {
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
                   <Route path="/" element={<WorkspaceHome />} />
+                  <Route path="/curated" element={<CuratedListsTab />} />
+                  <Route path="/curated/:categoryId" element={<CuratedListsTab />} />
                   <Route path="/favorites" element={<FavoritesTab />} />
                   <Route path="/ticker" element={<SingleTickerTab />} />
                   <Route path="/ticker/:symbol" element={<SingleTickerTab />} />

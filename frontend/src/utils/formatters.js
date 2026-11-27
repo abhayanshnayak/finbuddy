@@ -9,15 +9,40 @@ export const formatLargeNumber = (num) => {
   return Number(num).toFixed(2).replace(/\.00$/, '');
 };
 
-export const formatSignedCurrency = (num) => {
-  if (num === null || num === undefined || Number.isNaN(num)) return '—';
-  if (num === 0) return '$0';
-  const absNum = Math.abs(num);
+const CURRENCY_PREFIX = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  CAD: 'C$',
+  TWD: 'NT$',
+  JPY: '¥',
+  CHF: 'CHF ',
+};
+
+export const getCurrencySymbol = (currency = 'USD') => {
+  const code = String(currency || 'USD').trim().toUpperCase();
+  return CURRENCY_PREFIX[code] || `${code} `;
+};
+
+export const formatSignedCurrency = (num, currency = 'USD') => {
+  if (num === null || num === undefined || Number.isNaN(Number(num))) return '—';
+  const val = Number(num);
+  const symbol = getCurrencySymbol(currency);
+  if (val === 0) return `${symbol}0`;
+  const absNum = Math.abs(val);
   const formatted =
     absNum < 1e3
       ? absNum.toFixed(2).replace(/\.00$/, '')
       : formatLargeNumber(absNum);
-  return num < 0 ? `−$${formatted}` : `$${formatted}`;
+  return val < 0 ? `−${symbol}${formatted}` : `${symbol}${formatted}`;
+};
+
+export const formatMetricPercent = (pct, decimals = 1, showPlus = false) => {
+  if (pct === null || pct === undefined || Number.isNaN(Number(pct))) return '—';
+  const val = Number(pct);
+  if (!Number.isFinite(val)) return '—';
+  const sign = val < 0 ? '−' : showPlus && val > 0 ? '+' : '';
+  return `${sign}${Math.abs(val).toFixed(decimals)}%`;
 };
 
 export const formatPrice = (num) => {

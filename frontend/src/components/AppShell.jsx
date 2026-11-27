@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import {
   Home,
+  Compass,
   Star,
   LineChart,
   Filter,
@@ -23,6 +24,7 @@ import { useFavorites } from '../context/favoritesStore';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Workspace Home', icon: Home, end: true },
+  { to: '/curated', label: 'Curated Lists', icon: Compass, end: false },
   { to: '/favorites', label: 'Favorites', icon: Star, end: false },
   { to: '/ticker', label: 'Ticker Research', icon: LineChart, end: false },
   { to: '/screener', label: 'Tag Screener', icon: Filter, end: false },
@@ -71,7 +73,8 @@ export default function AppShell({ theme, toggleTheme, children }) {
   const activeSymbol = tickerMatch ? decodeURIComponent(tickerMatch[1]).toUpperCase() : null;
 
   let sectionTitle = 'Workspace Home';
-  if (path.startsWith('/favorites')) sectionTitle = 'Favorites';
+  if (path.startsWith('/curated')) sectionTitle = 'Curated Lists';
+  else if (path.startsWith('/favorites')) sectionTitle = 'Favorites';
   else if (path.startsWith('/ticker')) sectionTitle = 'Ticker Research';
   else if (path.startsWith('/screener')) sectionTitle = 'Tag Screener';
   else if (path.startsWith('/ingest')) sectionTitle = 'Bulk Pipeline';
@@ -157,6 +160,11 @@ export default function AppShell({ theme, toggleTheme, children }) {
                 {!sidebarCollapsed && (
                   <span className="truncate flex-1">{item.label}</span>
                 )}
+                {!sidebarCollapsed && item.to === '/curated' && (
+                  <span className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded bg-brand-soft text-brand border border-brand/20 num">
+                    10
+                  </span>
+                )}
                 {!sidebarCollapsed && item.to === '/favorites' && isAuthenticated && favorites.length > 0 && (
                   <span className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 num">
                     {favorites.length}
@@ -240,6 +248,11 @@ export default function AppShell({ theme, toggleTheme, children }) {
                   >
                     <Icon className="w-4 h-4 flex-shrink-0" />
                     <span className="flex-1">{item.label}</span>
+                    {item.to === '/curated' && (
+                      <span className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-brand-soft text-brand border border-brand/20 num">
+                        10
+                      </span>
+                    )}
                     {item.to === '/favorites' && isAuthenticated && favorites.length > 0 && (
                       <span className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 num">
                         {favorites.length}

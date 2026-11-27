@@ -3,11 +3,17 @@ from app.services.finnhub_client import FinnhubClient
 from app.services.calculator import FinancialCalculator
 from app.services.analyst_service import AnalystService
 from app.services.db_service import DBService
+from app.services.curated_service import CuratedListService
 
 finnhub_client = FinnhubClient(api_key=settings.FINNHUB_API_KEY)
 calc_service = FinancialCalculator()
 ai_service = AnalystService(project_id=settings.GCP_PROJECT_ID)
 db_service = DBService(project_id=settings.GCP_PROJECT_ID)
+curated_service = CuratedListService(
+    db=db_service,
+    finnhub=finnhub_client,
+    calc=calc_service,
+)
 
 try:
     from google.cloud import pubsub_v1

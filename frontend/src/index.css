@@ -245,6 +245,267 @@
   }
 }
 
+/* ============================================================================
+   Curated Lists: Scrollable Category Strip (scroll-driven edge fades + fallback),
+   Native <details> Supply-Chain Accordions, and Responsive Sortable Tables
+   ============================================================================ */
+
+@property --fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.sc-category-scroller {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: inline proximity;
+  --fade-size: 2.5rem;
+  --fade-dir: right;
+  --fade-start-pos: 0;
+  --fade-end-pos: 100%;
+  scroll-padding-inline: var(--fade-size);
+  scrollbar-width: none;
+  mask:
+    linear-gradient(black, black) no-clip subtract,
+    linear-gradient(to var(--fade-dir), black, transparent) var(--fade-start-pos) 0 / var(--fade-start) 100% no-repeat no-clip,
+    linear-gradient(to var(--fade-dir), transparent, black) var(--fade-end-pos) 0 / var(--fade-end) 100% no-repeat no-clip;
+  transition: --fade-start 0.2s ease, --fade-end 0.2s ease;
+}
+
+.sc-category-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+@supports (animation-timeline: scroll(self inline)) {
+  .sc-category-scroller {
+    animation: sc-reveal-fade-start linear both, sc-hide-fade-end linear both;
+    animation-timeline: scroll(self inline);
+    animation-range: 0 var(--fade-size), calc(100% - var(--fade-size)) 100%;
+  }
+}
+
+.sc-category-scroller.more-start {
+  --fade-start: var(--fade-size);
+}
+
+.sc-category-scroller.more-end {
+  --fade-end: var(--fade-size);
+}
+
+@keyframes sc-reveal-fade-start {
+  to {
+    --fade-start: var(--fade-size);
+  }
+}
+
+@keyframes sc-hide-fade-end {
+  from {
+    --fade-end: var(--fade-size);
+  }
+}
+
+.sc-category-tab {
+  position: relative;
+  flex: none;
+  scroll-snap-align: start;
+}
+
+.sc-category-tab[aria-current="page"]::after,
+.sc-view-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  border-block-end: 3px solid currentColor;
+  border-radius: 9999px 9999px 0 0;
+}
+
+/* Native <details> Supply-Chain Bucket Accordions */
+.sc-bucket-details summary {
+  list-style: none;
+}
+
+.sc-bucket-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.sc-bucket-details summary .sc-bucket-chevron {
+  transform: rotate(-90deg);
+}
+
+.sc-bucket-details[open] > summary .sc-bucket-chevron {
+  transform: rotate(0deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sc-bucket-details summary .sc-bucket-chevron {
+    transition: transform 0.2s ease;
+  }
+
+  .sc-bucket-details::details-content {
+    interpolate-size: allow-keywords;
+    overflow: clip;
+    contain: layout;
+    transition-property: block-size, content-visibility, display;
+    transition-duration: 0.24s;
+    transition-timing-function: ease-in-out;
+    transition-behavior: allow-discrete;
+  }
+}
+
+.sc-bucket-details:not([open])::details-content {
+  block-size: 0;
+}
+
+/* Responsive & Sortable Curated Financial Table */
+.sc-curated-table-wrapper {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  container-type: inline-size;
+}
+
+.sc-curated-table {
+  width: 100%;
+  min-inline-size: 1060px;
+  border-collapse: separate;
+  border-spacing: 0;
+  --label-2: "Big 4 & Trend";
+  --label-3: "ROIC";
+  --label-4: "ROE";
+  --label-5: "NI Margin";
+  --label-6: "FCF Margin";
+  --label-7: "Debt";
+  --label-8: "Cash & Equiv.";
+  --label-9: "Report";
+}
+
+.sc-curated-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+}
+
+.sc-curated-table thead th:has(button) {
+  padding: 0;
+}
+
+.sc-curated-table thead th .sc-sort-indicator-asc,
+.sc-curated-table thead th .sc-sort-indicator-desc {
+  display: none;
+}
+
+.sc-curated-table thead th[aria-sort="ascending"] .sc-sort-indicator-neutral,
+.sc-curated-table thead th[aria-sort="descending"] .sc-sort-indicator-neutral {
+  display: none;
+}
+
+.sc-curated-table thead th[aria-sort="ascending"] .sc-sort-indicator-asc {
+  display: inline-flex;
+}
+
+.sc-curated-table thead th[aria-sort="descending"] .sc-sort-indicator-desc {
+  display: inline-flex;
+}
+
+.sc-curated-table tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background-color: var(--bg-surface);
+  font-weight: inherit;
+  text-align: left;
+  box-shadow: 1px 0 0 0 var(--border-subtle);
+}
+
+.sc-curated-table tbody tr:hover th {
+  background-color: rgb(var(--bg-subtle-rgb) / 0.85);
+}
+
+@container (width < 760px) {
+  .sc-curated-table {
+    min-inline-size: 0;
+  }
+
+  .sc-curated-table,
+  .sc-curated-table thead,
+  .sc-curated-table tbody,
+  .sc-curated-table tr,
+  .sc-curated-table th,
+  .sc-curated-table td {
+    display: block;
+  }
+
+  .sc-curated-table thead {
+    display: none;
+  }
+
+  .sc-curated-table tbody {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .sc-curated-table tbody tr {
+    border: 1px solid var(--border-subtle);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background-color: var(--bg-surface);
+  }
+
+  .sc-curated-table tbody th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    background-color: rgb(var(--bg-subtle-rgb) / 0.9);
+    border-bottom: 1px solid var(--border-subtle);
+    box-shadow: none;
+    padding: 0.85rem 1rem;
+  }
+
+  .sc-curated-table tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    text-align: right;
+    border-bottom: 1px solid rgb(var(--border-subtle-rgb) / 0.6);
+  }
+
+  .sc-curated-table tbody td:last-child {
+    border-bottom: none;
+  }
+
+  .sc-curated-table tbody td::before {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-align: left;
+    flex-shrink: 0;
+    padding-top: 0.15rem;
+  }
+
+  .sc-curated-table tbody td:nth-child(2)::before { content: var(--label-2) ": "; }
+  .sc-curated-table tbody td:nth-child(3)::before { content: var(--label-3) ": "; }
+  .sc-curated-table tbody td:nth-child(4)::before { content: var(--label-4) ": "; }
+  .sc-curated-table tbody td:nth-child(5)::before { content: var(--label-5) ": "; }
+  .sc-curated-table tbody td:nth-child(6)::before { content: var(--label-6) ": "; }
+  .sc-curated-table tbody td:nth-child(7)::before { content: var(--label-7) ": "; }
+  .sc-curated-table tbody td:nth-child(8)::before { content: var(--label-8) ": "; }
+  .sc-curated-table tbody td:nth-child(9)::before { content: var(--label-9) ": "; }
+}
+
 /* Subtle enterprise scrollbars */
 .custom-scrollbar {
   scrollbar-width: thin;

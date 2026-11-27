@@ -8,6 +8,10 @@ class FinnhubClient:
             "us-gaap_Revenues",
             "us-gaap_SalesRevenueNet",
             "us-gaap_RevenueFromContractWithCustomerExcludingAssessedTax",
+            "us-gaap_RevenueFromContractWithCustomerIncludingAssessedTax",
+            "us-gaap_RegulatedAndUnregulatedOperatingRevenue",
+            "us-gaap_ElectricUtilityRevenue",
+            "us-gaap_RevenuesNetOfInterestExpense",
         ]),
         "net_income": ("ic", ["us-gaap_NetIncomeLoss"]),
         "operating_cash_flow": ("cf", [
@@ -377,9 +381,29 @@ class FinnhubClient:
 
         # Also get current total debt and cash from the latest report
         latest_report = raw_reports[-1]["report"] if raw_reports else {}
-        total_debt_short = get_val(latest_report, "bs", ["us-gaap_DebtCurrent", "us-gaap_ShortTermBorrowings"])
-        total_debt_long = get_val(latest_report, "bs", ["us-gaap_LongTermDebt", "us-gaap_LongTermDebtNoncurrent"])
-        cash = get_val(latest_report, "bs", ["us-gaap_CashAndCashEquivalentsAtCarryingValue"])
+        total_debt_short = get_val(latest_report, "bs", [
+            "us-gaap_DebtCurrent",
+            "us-gaap_ShortTermBorrowings",
+            "us-gaap_LongTermDebtCurrent",
+            "us-gaap_LongTermDebtAndCapitalLeaseObligationsCurrent",
+            "us-gaap_CommercialPaper",
+            "us-gaap_ShortTermDebt",
+            "us-gaap_OtherShortTermBorrowings",
+        ])
+        total_debt_long = get_val(latest_report, "bs", [
+            "us-gaap_LongTermDebt",
+            "us-gaap_LongTermDebtNoncurrent",
+            "us-gaap_LongTermDebtAndCapitalLeaseObligations",
+            "us-gaap_LongTermNotesPayable",
+            "us-gaap_DebtAndCapitalLeaseObligations",
+        ])
+        cash = get_val(latest_report, "bs", [
+            "us-gaap_CashAndCashEquivalentsAtCarryingValue",
+            "us-gaap_CashCashEquivalentsAndShortTermInvestments",
+            "us-gaap_CashAndDueFromBanks",
+            "us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+            "us-gaap_Cash",
+        ])
         
         result: Dict[str, Any] = {
             "history": history,

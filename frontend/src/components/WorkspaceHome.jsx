@@ -5,6 +5,7 @@ import {
   Tag,
   Clock,
   ArrowRight,
+  Compass,
   Layers,
   Filter,
   ShieldCheck,
@@ -213,6 +214,28 @@ export default function WorkspaceHome() {
 
         {/* Workflow Launch Cards */}
         <div className="space-y-4">
+          <Link
+            to="/curated"
+            className="block bg-surface border border-line hover:border-brand/60 rounded-xl p-5 transition-all group"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-9 h-9 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+                <Compass className="w-4 h-4" />
+              </div>
+              <ArrowRight className="w-4 h-4 text-ink-muted group-hover:text-brand group-hover:translate-x-0.5 transition-all" />
+            </div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-ink">Curated Thematic Lists</h3>
+              <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-brand-soft text-brand border border-brand/20">
+                10 Themes
+              </span>
+            </div>
+            <p className="text-xs text-ink-muted mt-1 leading-relaxed">
+              Explore cached supply-chain lists across AI, Cloud, Robotics, Power, Auto, Utilities,
+              Banks &amp; Healthcare with Big 4 trends, ROIC, ROE, margins, and maturity tags.
+            </p>
+          </Link>
+
           <Link
             to="/screener"
             className="block bg-surface border border-line hover:border-brand/60 rounded-xl p-5 transition-all group"

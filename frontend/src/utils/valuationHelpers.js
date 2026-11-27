@@ -216,4 +216,32 @@ export const GLOSSARY = {
     formula: 'ROIC = NOPAT ÷ Invested Capital · ROE = Net Income ÷ Equity',
     benchmark: 'Target: Consistently ≥ 10% over 3Y, 5Y, and 10Y',
   },
+  netIncomeMargin: {
+    title: 'Net Income Margin (TTM)',
+    summary:
+      'The share of each revenue dollar that flows all the way down to bottom-line GAAP net profit after COGS, R&D, operating expenses, interest, and taxes.',
+    formula: 'Net Margin = Net Income (TTM) ÷ Revenue (TTM)',
+    benchmark: 'Software/Semis ≥ 20% · Industrials/Banks ≥ 10–15%',
+  },
+  fcfMargin: {
+    title: 'Free Cash Flow Margin (TTM)',
+    summary:
+      'The share of revenue converted into unencumbered Free Cash Flow after capital expenditures—a cleaner measure of real owner cash generation than GAAP earnings alone.',
+    formula: 'FCF Margin = (Operating Cash Flow − |CapEx|) ÷ Revenue',
+    benchmark: 'Elite compounders sustain ≥ 15–20% FCF margins',
+  },
+  debtAndCash: {
+    title: 'Total Debt & Cash Equivalents',
+    summary:
+      'Latest balance-sheet short- and long-term debt compared against liquid cash & short-term investments. Net-cash balance sheets provide resilience during downturns.',
+    formula: 'Net Debt = Total Debt − Cash & Equivalents',
+    benchmark: 'Prefer Net Cash or Debt payoff ≤ 3× annual FCF',
+  },
+  maturityStage: {
+    title: 'Established vs. Future Potential',
+    summary:
+      'Established picks are category-defining incumbents with proven scale, durable moats, and consistent cash generation. Future Potential picks are high-upside challengers, emerging supply-chain bottlenecks, or inflection plays.',
+    formula: 'Qualitative positioning + scale & cash-flow maturity',
+    benchmark: 'Blend Established anchors with selective Future Potential upside',
+  },
 };

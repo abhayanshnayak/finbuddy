@@ -38,8 +38,8 @@ export function computeFavoriteDelta(currentPrice, mosPrice) {
 
   const amount = curr - mos;
   const pct = (amount / mos) * 100;
-  const isAtTarget = Math.abs(amount) < 0.005;
-  const isInBuyZone = curr <= mos || isAtTarget;
+  const isInBuyZone = curr <= mos;
+  const isAtTarget = isInBuyZone && Math.abs(amount) < 0.005;
 
   return {
     amount,
