@@ -35,7 +35,7 @@ from app.services.report_service import (
     compute_ttm_cash_flow_and_growth,
 )
 
-CURATED_CACHE_SCHEMA_VERSION = 1
+CURATED_CACHE_SCHEMA_VERSION = 2
 MEMORY_CACHE_TTL_SECONDS = 6 * 3600  # 6 hours in-process
 LIST_CACHE_TTL_SECONDS = 5 * 60      # 5 minutes in-process catalog summary cache
 FIRESTORE_CACHE_TTL_DAYS = 7         # 7 days persistent cache before background/auto refresh
@@ -144,6 +144,95 @@ def _safe_cagr_from_history(
     start_yr = history[-(years_back + 1)].get("year")
     span = (end_yr - start_yr) if (isinstance(end_yr, int) and isinstance(start_yr, int) and end_yr > start_yr) else years_back
     return calc.calculate_cagr(start_val, end_val, span)
+
+
+def _compute_ttm_delta(
+    latest_val: Optional[float],
+    period_type: str,
+    ttm_source: str,
+    history: List[Dict[str, Any]],
+    fallback_yoy_ratio: Optional[float],
+) -> Dict[str, Any]:
+    """Computes TTM/MRQ delta ($ and %) vs latest annual FY (or prior FY when TTM == latest FY).
+
+    Guards against reporting-basis mismatches (e.g., banks where Finnhub psTTM uses gross
+    revenue while XBRL reports revenue net of interest expense) by checking ratio sanity
+    and falling back to period-matched YoY growth ratios when needed.
+    """
+    non_zero_hist = [
+        pt for pt in (history or [])
+        if pt.get("value") is not None and math.isfinite(pt["value"]) and pt["value"] != 0.0
+    ]
+
+    baseline_val: Optional[float] = None
+    baseline_year: Optional[int] = None
+
+    if latest_val is not None and non_zero_hist:
+        last_pt = non_zero_hist[-1]
+        last_val = float(last_pt["value"])
+        last_yr = last_pt.get("year")
+
+        # Check if TTM/MRQ is essentially identical to the latest annual 10-K filing
+        is_same_as_latest_fy = (
+            abs(latest_val - last_val) / max(abs(last_val), 1.0) < 0.005
+            or str(period_type).startswith("FY")
+        )
+
+        if is_same_as_latest_fy and len(non_zero_hist) >= 2:
+            prev_pt = non_zero_hist[-2]
+            baseline_val = float(prev_pt["value"])
+            baseline_year = prev_pt.get("year")
+        elif not is_same_as_latest_fy:
+            # Guard against XBRL-vs-Finnhub accounting basis mismatch (e.g. bank gross vs net revenue)
+            ratio_mismatch = (
+                ttm_source == "finnhub_metrics"
+                and last_val > 0
+                and latest_val > 0
+                and (latest_val / last_val > 2.4 or last_val / latest_val > 2.4)
+                and fallback_yoy_ratio is not None
+                and abs(fallback_yoy_ratio) < 1.0
+            )
+            if not ratio_mismatch:
+                baseline_val = last_val
+                baseline_year = last_yr
+
+    if latest_val is not None and baseline_val is not None and baseline_val != 0.0:
+        delta_amt = latest_val - baseline_val
+        delta_pct = delta_amt / abs(baseline_val)
+        # Clamp extreme outliers from tiny denominators
+        if abs(delta_pct) > 10.0:
+            delta_pct = max(-10.0, min(10.0, delta_pct))
+        basis_label = f"vs FY{str(baseline_year)[-2:]}" if baseline_year else "vs Prior FY"
+        return {
+            "prior_fy_value": _round_opt(baseline_val, 2),
+            "prior_fy_year": baseline_year,
+            "delta_amount": _round_opt(delta_amt, 2),
+            "delta_pct": _round_opt(delta_pct, 4),
+            "delta_basis": basis_label,
+        }
+
+    # Fallback: use period-matched YoY ratio (e.g. Finnhub TTM YoY or 1Y CAGR)
+    if fallback_yoy_ratio is not None and math.isfinite(fallback_yoy_ratio):
+        delta_amt = None
+        implied_prior = None
+        if latest_val is not None and (1.0 + fallback_yoy_ratio) > 0.05:
+            implied_prior = latest_val / (1.0 + fallback_yoy_ratio)
+            delta_amt = latest_val - implied_prior
+        return {
+            "prior_fy_value": _round_opt(implied_prior, 2),
+            "prior_fy_year": None,
+            "delta_amount": _round_opt(delta_amt, 2),
+            "delta_pct": _round_opt(max(-10.0, min(10.0, fallback_yoy_ratio)), 4),
+            "delta_basis": "YoY",
+        }
+
+    return {
+        "prior_fy_value": None,
+        "prior_fy_year": None,
+        "delta_amount": None,
+        "delta_pct": None,
+        "delta_basis": None,
+    }
 
 
 def _classify_metric_trend(
@@ -339,6 +428,8 @@ def extract_curated_company_metrics(
         "book_value": _per_share_fallback("bookValuePerShareQuarterly") or _per_share_fallback("bookValuePerShareAnnual"),
     }
 
+    ttm_rev_yoy = _to_finite_float((ttm_cf_growth.get("revenue_growth_yoy") or {}).get("value"))
+
     big4: Dict[str, Dict[str, Any]] = {}
     for metric_key in ("revenue", "net_income", "operating_cash_flow", "book_value"):
         hist = xbrl_histories[metric_key]
@@ -347,15 +438,20 @@ def extract_curated_company_metrics(
 
         ttm_entry = big4_ttm.get(metric_key) or {}
         ttm_val = _to_finite_float(ttm_entry.get("value"))
+        ttm_period = ttm_entry.get("period")
+        ttm_source = str(ttm_entry.get("source") or "")
         if ttm_val is not None:
             latest_val = ttm_val
             period_type = ttm_entry.get("period_type") or ("MRQ" if metric_key == "book_value" else "TTM")
         elif hist:
             latest_val = hist[-1]["value"]
             period_type = f"FY{hist[-1]['year']}"
+            ttm_period = str(hist[-1]["year"])
+            ttm_source = "xbrl_annual"
         else:
             latest_val = latest_per_share_fallbacks[metric_key]
             period_type = "MRQ" if metric_key == "book_value" else "TTM"
+            ttm_source = "finnhub_metrics"
 
         c1 = _safe_cagr_from_history(hist, 1, calc)
         c3 = _safe_cagr_from_history(hist, 3, calc)
@@ -369,6 +465,17 @@ def extract_curated_company_metrics(
         if c5 is None:
             c5 = fb5
 
+        fallback_yoy = (
+            ttm_rev_yoy if (metric_key == "revenue" and ttm_rev_yoy is not None) else (fb1 if fb1 is not None else c1)
+        )
+        delta_info = _compute_ttm_delta(
+            latest_val=latest_val,
+            period_type=period_type,
+            ttm_source=ttm_source,
+            history=hist,
+            fallback_yoy_ratio=fallback_yoy,
+        )
+
         trend = _classify_metric_trend(latest_val, hist, c1, c3, c5)
         compact_hist = [
             {"year": pt["year"], "value": round(float(pt["value"]), 2)}
@@ -378,6 +485,12 @@ def extract_curated_company_metrics(
         big4[metric_key] = {
             "latest": _round_opt(latest_val, 2),
             "period_type": period_type,
+            "period": ttm_period,
+            "prior_fy_value": delta_info["prior_fy_value"],
+            "prior_fy_year": delta_info["prior_fy_year"],
+            "delta_amount": delta_info["delta_amount"],
+            "delta_pct": delta_info["delta_pct"],
+            "delta_basis": delta_info["delta_basis"],
             "cagr_1y": _round_opt(c1, 4),
             "cagr_3y": _round_opt(c3, 4),
             "cagr_5y": _round_opt(c5, 4),
@@ -686,6 +799,12 @@ class CuratedListService:
             empty_metric = {
                 "latest": None,
                 "period_type": "TTM",
+                "period": None,
+                "prior_fy_value": None,
+                "prior_fy_year": None,
+                "delta_amount": None,
+                "delta_pct": None,
+                "delta_basis": None,
                 "cagr_1y": None,
                 "cagr_3y": None,
                 "cagr_5y": None,

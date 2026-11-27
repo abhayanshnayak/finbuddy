@@ -160,6 +160,12 @@ def test_extractCuratedCompanyMetrics_extractsBig4MarginsReturnsDebtAndCash():
     assert result["net_income_margin_pct"] == pytest.approx(55.8)
     assert result["fcf_margin_pct"] == pytest.approx(44.0)
     assert result["big4"]["revenue"]["latest"] == pytest.approx(150000000000.0)
+    assert result["big4"]["revenue"]["period_type"] == "TTM"
+    # TTM == FY2026 (150B), so delta compares against FY2025 (130.497B) -> +14.9%
+    assert result["big4"]["revenue"]["prior_fy_year"] == 2025
+    assert result["big4"]["revenue"]["delta_amount"] == pytest.approx(150000000000.0 - 130497000000.0)
+    assert result["big4"]["revenue"]["delta_pct"] == pytest.approx((150000000000.0 - 130497000000.0) / 130497000000.0, rel=1e-3)
+    assert result["big4"]["revenue"]["delta_basis"] == "vs FY25"
     assert result["big4"]["revenue"]["trend"] == "strong_growth"
     assert result["big4"]["revenue"]["cagr_5y"] > 0.50
     assert len(result["big4"]["revenue"]["history"]) == 6

@@ -1,20 +1,20 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { formatSignedCurrency, formatPercent } from '../../utils/formatters';
 import { getGrowthTier } from '../../utils/valuationHelpers';
 
 const BIG4_ROWS = [
-  { key: 'revenue', short: 'Rev', label: 'Revenue' },
-  { key: 'net_income', short: 'NI', label: 'Net Income' },
-  { key: 'operating_cash_flow', short: 'OCF', label: 'Operating Cash Flow' },
-  { key: 'book_value', short: 'Book', label: 'Book Value' },
+  { key: 'revenue', short: 'Rev', defaultBasis: 'TTM', label: 'Revenue' },
+  { key: 'net_income', short: 'NI', defaultBasis: 'TTM', label: 'Net Income' },
+  { key: 'operating_cash_flow', short: 'OCF', defaultBasis: 'TTM', label: 'Operating Cash Flow' },
+  { key: 'book_value', short: 'Book', defaultBasis: 'MRQ', label: 'Book Value' },
 ];
 
 function MiniTrendSparkline({ history = [], trend = 'unavailable' }) {
   if (!Array.isArray(history) || history.length < 2) {
     return (
       <span
-        className="inline-block w-10 h-3.5 text-center text-[10px] text-ink-muted leading-3"
+        className="inline-block w-8 h-3.5 text-center text-[10px] text-ink-muted leading-3"
         aria-hidden="true"
       >
         —
@@ -26,8 +26,8 @@ function MiniTrendSparkline({ history = [], trend = 'unavailable' }) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  const width = 40;
-  const height = 14;
+  const width = 32;
+  const height = 13;
   const pad = 1.5;
 
   const points = values
@@ -69,6 +69,79 @@ function MiniTrendSparkline({ history = [], trend = 'unavailable' }) {
   );
 }
 
+function resolveDelta(item) {
+  if (!item) return { pct: null, amount: null, basis: null, priorVal: null };
+
+  // Prefer backend-computed TTM/MRQ delta fields
+  if (item.delta_pct !== null && item.delta_pct !== undefined && Number.isFinite(Number(item.delta_pct))) {
+    return {
+      pct: Number(item.delta_pct),
+      amount:
+        item.delta_amount !== null && item.delta_amount !== undefined && Number.isFinite(Number(item.delta_amount))
+          ? Number(item.delta_amount)
+          : null,
+      basis: item.delta_basis || (item.prior_fy_year ? `vs FY${String(item.prior_fy_year).slice(-2)}` : 'YoY'),
+      priorVal:
+        item.prior_fy_value !== null && item.prior_fy_value !== undefined && Number.isFinite(Number(item.prior_fy_value))
+          ? Number(item.prior_fy_value)
+          : null,
+    };
+  }
+
+  // Graceful fallback for older cached docs
+  const latest = Number(item.latest);
+  const hist = Array.isArray(item.history)
+    ? item.history.filter((pt) => pt && Number.isFinite(Number(pt.value)) && Number(pt.value) !== 0)
+    : [];
+  if (Number.isFinite(latest) && hist.length > 0) {
+    const last = hist[hist.length - 1];
+    const lastVal = Number(last.value);
+    const sameAsFy = Math.abs(latest - lastVal) / Math.max(Math.abs(lastVal), 1) < 0.005;
+    const base = sameAsFy && hist.length >= 2 ? hist[hist.length - 2] : !sameAsFy ? last : null;
+    if (base && Number(base.value) !== 0) {
+      const baseVal = Number(base.value);
+      const amt = latest - baseVal;
+      return {
+        pct: amt / Math.abs(baseVal),
+        amount: amt,
+        basis: base.year ? `vs FY${String(base.year).slice(-2)}` : 'vs FY',
+        priorVal: baseVal,
+      };
+    }
+  }
+
+  if (item.cagr_1y !== null && item.cagr_1y !== undefined && Number.isFinite(Number(item.cagr_1y))) {
+    return { pct: Number(item.cagr_1y), amount: null, basis: '1Y', priorVal: null };
+  }
+
+  return { pct: null, amount: null, basis: null, priorVal: null };
+}
+
+function formatSignedDeltaPct(ratio) {
+  if (ratio === null || ratio === undefined || !Number.isFinite(ratio)) return '—';
+  const pct = ratio * 100;
+  if (Math.abs(pct) < 0.05) return '0.0%';
+  const sign = pct > 0 ? '+' : '−';
+  const absStr = Math.abs(pct) >= 100 ? Math.abs(pct).toFixed(0) : Math.abs(pct).toFixed(1);
+  return `${sign}${absStr}%`;
+}
+
+function formatSignedDeltaAmount(amount, currency = 'USD') {
+  if (amount === null || amount === undefined || !Number.isFinite(amount)) return '—';
+  if (amount === 0) return formatSignedCurrency(0, currency);
+  const formatted = formatSignedCurrency(Math.abs(amount), currency);
+  return amount > 0 ? `+${formatted}` : `−${formatted}`;
+}
+
+function getDeltaColorClass(ratio) {
+  if (ratio === null || ratio === undefined || !Number.isFinite(ratio)) return 'text-ink-muted';
+  if (ratio >= 0.05) return 'text-emerald-700 dark:text-emerald-400';
+  if (ratio > 0) return 'text-emerald-600 dark:text-emerald-400';
+  if (ratio <= -0.05) return 'text-rose-600 dark:text-rose-400';
+  if (ratio < 0) return 'text-amber-700 dark:text-amber-400';
+  return 'text-ink-muted';
+}
+
 function pickPrimaryCagr(metricObj) {
   if (!metricObj) return { rate: null, horizon: '' };
   if (metricObj.cagr_3y !== null && metricObj.cagr_3y !== undefined) {
@@ -83,101 +156,102 @@ function pickPrimaryCagr(metricObj) {
   return { rate: null, horizon: '' };
 }
 
-function getTrendBadgeInfo(trend) {
-  switch (trend) {
-    case 'strong_growth':
-      return {
-        label: 'Strong',
-        Icon: TrendingUp,
-        cls: 'text-emerald-700 dark:text-emerald-400',
-      };
-    case 'growing':
-      return {
-        label: 'Up',
-        Icon: TrendingUp,
-        cls: 'text-emerald-600 dark:text-emerald-400',
-      };
-    case 'turnaround':
-      return {
-        label: 'Inflecting',
-        Icon: TrendingUp,
-        cls: 'text-sky-700 dark:text-sky-400',
-      };
-    case 'contracting':
-    case 'negative':
-      return {
-        label: trend === 'negative' ? 'Loss' : 'Down',
-        Icon: TrendingDown,
-        cls: 'text-rose-600 dark:text-rose-400',
-      };
-    case 'stable':
-      return {
-        label: 'Flat',
-        Icon: Minus,
-        cls: 'text-amber-600 dark:text-amber-400',
-      };
-    default:
-      return null;
-  }
-}
-
 export default function CuratedBig4Cell({ big4 = {}, currency = 'USD', ticker = '' }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <div
-      className="min-w-[270px] space-y-1.5 text-left"
+      className="w-full space-y-1 text-left"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="grid grid-cols-1 gap-1">
+      {/* Compact Sub-header */}
+      <div className="grid grid-cols-[54px_1fr_76px_74px] items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-ink-muted/80 pb-0.5 border-b border-line/60">
+        <span>Metric</span>
+        <span className="text-right">TTM / MRQ</span>
+        <span className="text-right">Δ Change</span>
+        <span className="text-right">Trend</span>
+      </div>
+
+      {/* Big 4 TTM/MRQ + Delta Rows */}
+      <div className="space-y-1">
         {BIG4_ROWS.map((row) => {
           const item = big4?.[row.key] || {};
+          const basisTag = item.period_type || row.defaultBasis;
+          const shortBasis = String(basisTag).startsWith('FY') ? 'FY' : basisTag;
+          const delta = resolveDelta(item);
           const { rate, horizon } = pickPrimaryCagr(item);
           const tier = getGrowthTier(rate);
-          const trendInfo = getTrendBadgeInfo(item.trend);
+
+          const deltaTitle = [
+            `${row.label} (${basisTag}): ${formatSignedCurrency(item.latest, currency)}`,
+            delta.priorVal !== null
+              ? `${delta.basis || 'Prior'}: ${formatSignedCurrency(delta.priorVal, currency)}`
+              : null,
+            delta.amount !== null
+              ? `Δ ${formatSignedDeltaAmount(delta.amount, currency)} (${formatSignedDeltaPct(delta.pct)})`
+              : delta.pct !== null
+                ? `Δ ${formatSignedDeltaPct(delta.pct)} (${delta.basis || 'YoY'})`
+                : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
 
           return (
             <div
               key={row.key}
-              className="flex items-center justify-between gap-2 text-[11px] leading-tight"
+              title={deltaTitle}
+              className="grid grid-cols-[54px_1fr_76px_74px] items-center gap-1.5 text-[11px] leading-tight"
             >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="font-semibold text-ink-muted w-8 flex-shrink-0">
-                  {row.short}
-                </span>
-                <span
-                  className={`font-mono font-semibold num whitespace-nowrap ${
-                    item.latest !== null && item.latest < 0
-                      ? 'text-rose-600 dark:text-rose-400'
-                      : 'text-ink'
-                  }`}
-                >
-                  {formatSignedCurrency(item.latest, currency)}
+              {/* Metric + TTM/MRQ chip */}
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="font-semibold text-ink-secondary">{row.short}</span>
+                <span className="text-[8px] font-mono font-semibold uppercase px-1 py-px rounded bg-subtle text-ink-muted border border-line/70">
+                  {shortBasis}
                 </span>
               </div>
 
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              {/* TTM / MRQ Value */}
+              <span
+                className={`font-mono font-bold num text-right whitespace-nowrap ${
+                  item.latest !== null && item.latest < 0
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-ink'
+                }`}
+              >
+                {formatSignedCurrency(item.latest, currency)}
+              </span>
+
+              {/* TTM Delta % + compact basis/dollar */}
+              <div className="text-right whitespace-nowrap leading-none">
+                <span
+                  className={`font-mono font-bold num text-[11px] block ${getDeltaColorClass(
+                    delta.pct
+                  )}`}
+                >
+                  {formatSignedDeltaPct(delta.pct)}
+                </span>
+                {delta.amount !== null ? (
+                  <span className="text-[9px] font-mono text-ink-muted num block mt-0.5">
+                    {formatSignedDeltaAmount(delta.amount, currency)}
+                  </span>
+                ) : delta.basis ? (
+                  <span className="text-[9px] text-ink-muted block mt-0.5">{delta.basis}</span>
+                ) : null}
+              </div>
+
+              {/* Sparkline + Primary CAGR */}
+              <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                 <MiniTrendSparkline history={item.history} trend={item.trend} />
                 {rate !== null ? (
                   <span
-                    className={`font-mono font-bold num text-[11px] w-[58px] text-right ${tier.textClass}`}
+                    className={`font-mono font-semibold num text-[10px] ${tier.textClass}`}
                     title={`${row.label} ${horizon} CAGR: ${formatPercent(rate, 1)}`}
                   >
                     {rate > 0 ? '+' : ''}
                     {formatPercent(rate, 0)}
-                    <span className="text-[9px] font-medium opacity-75 ml-0.5">
-                      {horizon}
-                    </span>
-                  </span>
-                ) : trendInfo ? (
-                  <span
-                    className={`inline-flex items-center justify-end gap-0.5 text-[10px] font-semibold w-[58px] ${trendInfo.cls}`}
-                  >
-                    <trendInfo.Icon className="w-2.5 h-2.5 flex-shrink-0" aria-hidden="true" />
-                    <span>{trendInfo.label}</span>
                   </span>
                 ) : (
-                  <span className="font-mono text-ink-muted w-[58px] text-right">—</span>
+                  <span className="font-mono text-[10px] text-ink-muted">—</span>
                 )}
               </div>
             </div>
@@ -185,44 +259,51 @@ export default function CuratedBig4Cell({ big4 = {}, currency = 'USD', ticker = 
         })}
       </div>
 
-      {/* Expandable 1Y / 3Y / 5Y CAGR Breakdown */}
+      {/* Expandable 1Y / 3Y / 5Y CAGR & Prior FY Delta Breakdown */}
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
         aria-expanded={expanded}
-        aria-label={`${expanded ? 'Hide' : 'Show'} multi-year Big 4 CAGRs for ${ticker}`}
+        aria-label={`${expanded ? 'Hide' : 'Show'} multi-year Big 4 CAGRs and prior FY delta for ${ticker}`}
         className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand hover:underline cursor-pointer pt-0.5"
       >
         {expanded ? (
           <>
             <ChevronUp className="w-3 h-3" aria-hidden="true" />
-            <span>Hide 1Y / 3Y / 5Y CAGRs</span>
+            <span>Hide 1Y / 3Y / 5Y &amp; Δ details</span>
           </>
         ) : (
           <>
             <ChevronDown className="w-3 h-3" aria-hidden="true" />
-            <span>1Y / 3Y / 5Y CAGRs</span>
+            <span>1Y / 3Y / 5Y &amp; Δ details</span>
           </>
         )}
       </button>
 
       {expanded && (
         <div className="mt-1 p-2 rounded-lg bg-subtle/80 border border-line text-[10px] space-y-1">
-          <div className="grid grid-cols-4 gap-1 font-semibold text-ink-muted border-b border-line pb-1">
+          <div className="grid grid-cols-[36px_1fr_36px_36px_36px] gap-1 font-semibold text-ink-muted border-b border-line pb-1">
             <span>Metric</span>
+            <span className="text-right">Prior FY</span>
             <span className="text-right">1Y</span>
             <span className="text-right">3Y</span>
             <span className="text-right">5Y</span>
           </div>
           {BIG4_ROWS.map((row) => {
             const item = big4?.[row.key] || {};
-            const c1 = item.cagr_1y;
-            const c3 = item.cagr_3y;
-            const c5 = item.cagr_5y;
+            const delta = resolveDelta(item);
             return (
-              <div key={row.key} className="grid grid-cols-4 gap-1 font-mono num">
+              <div
+                key={row.key}
+                className="grid grid-cols-[36px_1fr_36px_36px_36px] gap-1 font-mono num items-center"
+              >
                 <span className="font-sans font-medium text-ink-secondary">{row.short}</span>
-                {[c1, c3, c5].map((val, idx) => {
+                <span className="text-right text-ink-muted whitespace-nowrap">
+                  {delta.priorVal !== null
+                    ? `${formatSignedCurrency(delta.priorVal, currency)} ${delta.basis ? `(${delta.basis.replace('vs ', '')})` : ''}`
+                    : '—'}
+                </span>
+                {[item.cagr_1y, item.cagr_3y, item.cagr_5y].map((val, idx) => {
                   const t = getGrowthTier(val);
                   return (
                     <span
@@ -231,7 +312,7 @@ export default function CuratedBig4Cell({ big4 = {}, currency = 'USD', ticker = 
                         val !== null && val !== undefined ? t.textClass : 'text-ink-muted'
                       }`}
                     >
-                      {val !== null && val !== undefined ? formatPercent(val, 1) : '—'}
+                      {val !== null && val !== undefined ? formatPercent(val, 0) : '—'}
                     </span>
                   );
                 })}

@@ -44,15 +44,13 @@ function SortIcon() {
   );
 }
 
+// 6 compact columns designed to fit 100% inside desktop viewports with zero horizontal scroll
 const COLUMNS = [
-  { key: 'ticker', label: 'Company', type: 'text', align: 'left', tooltip: null },
-  { key: 'revenue', label: 'Big 4 & Trends', type: 'number', align: 'left', tooltip: 'big4' },
-  { key: 'roic_pct', label: 'ROIC', type: 'number', align: 'right', tooltip: 'returns' },
-  { key: 'roe_pct', label: 'ROE', type: 'number', align: 'right', tooltip: null },
-  { key: 'net_income_margin_pct', label: 'NI Margin', type: 'number', align: 'right', tooltip: 'netIncomeMargin' },
-  { key: 'fcf_margin_pct', label: 'FCF Margin', type: 'number', align: 'right', tooltip: 'fcfMargin' },
-  { key: 'total_debt', label: 'Debt', type: 'number', align: 'right', tooltip: 'debtAndCash' },
-  { key: 'cash_and_equivalents', label: 'Cash & Equiv.', type: 'number', align: 'right', tooltip: null },
+  { key: 'ticker', label: 'Company', type: 'text', align: 'left', tooltip: null, widthClass: 'w-[28%]' },
+  { key: 'revenue', label: 'Big 4 (TTM & Δ)', type: 'number', align: 'left', tooltip: 'big4Ttm', widthClass: 'w-[32%]' },
+  { key: 'roic_pct', label: 'ROIC / ROE', type: 'number', align: 'right', tooltip: 'returns', widthClass: 'w-[10%]' },
+  { key: 'fcf_margin_pct', label: 'NI / FCF Mgn', type: 'number', align: 'right', tooltip: 'fcfMargin', widthClass: 'w-[10%]' },
+  { key: 'cash_and_equivalents', label: 'Debt / Cash', type: 'number', align: 'right', tooltip: 'debtAndCash', widthClass: 'w-[12%]' },
 ];
 
 function extractSortValue(company, field) {
@@ -60,6 +58,10 @@ function extractSortValue(company, field) {
   if (field === 'revenue') {
     const rev = company.big4?.revenue?.latest;
     return typeof rev === 'number' && Number.isFinite(rev) ? rev : null;
+  }
+  if (field === 'revenue_delta_pct') {
+    const dp = company.big4?.revenue?.delta_pct;
+    return typeof dp === 'number' && Number.isFinite(dp) ? dp : null;
   }
   const raw = company[field];
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
@@ -69,23 +71,27 @@ export default function CuratedStockTable({
   companies = [],
   caption = 'Curated companies financial comparison',
   showBucketTag = false,
+  externalSort = null,
 }) {
   const navigate = useNavigate();
   const captionId = useId();
-  const [sortField, setSortField] = useState(null);
-  const [sortDir, setSortDir] = useState('ascending');
+  const [localSortField, setLocalSortField] = useState(null);
+  const [localSortDir, setLocalSortDir] = useState('ascending');
   const [announcement, setAnnouncement] = useState('');
 
+  const activeSortField = localSortField || externalSort?.field || null;
+  const activeSortDir = localSortField ? localSortDir : externalSort?.dir || 'descending';
+
   const sortedCompanies = useMemo(() => {
-    if (!sortField) return companies;
-    const factor = sortDir === 'ascending' ? 1 : -1;
+    if (!activeSortField) return companies;
+    const factor = activeSortDir === 'ascending' ? 1 : -1;
 
     return [...companies].sort((a, b) => {
-      if (sortField === 'ticker') {
+      if (activeSortField === 'ticker') {
         return factor * TEXT_COLLATOR.compare(a.ticker || '', b.ticker || '');
       }
-      const valA = extractSortValue(a, sortField);
-      const valB = extractSortValue(b, sortField);
+      const valA = extractSortValue(a, activeSortField);
+      const valB = extractSortValue(b, activeSortField);
       if (valA === null && valB === null) {
         return TEXT_COLLATOR.compare(a.ticker || '', b.ticker || '');
       }
@@ -93,19 +99,19 @@ export default function CuratedStockTable({
       if (valB === null) return -1;
       return factor * (valA - valB);
     });
-  }, [companies, sortField, sortDir]);
+  }, [companies, activeSortField, activeSortDir]);
 
   const handleSort = (col) => {
     const nextDir =
-      sortField === col.key
-        ? sortDir === 'ascending'
+      activeSortField === col.key
+        ? activeSortDir === 'ascending'
           ? 'descending'
           : 'ascending'
         : col.type === 'number'
           ? 'descending'
           : 'ascending';
-    setSortField(col.key);
-    setSortDir(nextDir);
+    setLocalSortField(col.key);
+    setLocalSortDir(nextDir);
     setAnnouncement(`Sorted by ${col.label}, ${nextDir}, ${companies.length} rows.`);
   };
 
@@ -137,13 +143,13 @@ export default function CuratedStockTable({
           <thead className="bg-subtle/90 backdrop-blur-sm text-[11px] font-semibold text-ink-muted uppercase tracking-wider border-b border-line">
             <tr>
               {COLUMNS.map((col) => {
-                const isSorted = sortField === col.key;
+                const isSorted = activeSortField === col.key;
                 return (
                   <th
                     key={col.key}
                     scope="col"
-                    aria-sort={isSorted ? sortDir : undefined}
-                    className={`border-b border-line whitespace-nowrap ${
+                    aria-sort={isSorted ? activeSortDir : undefined}
+                    className={`border-b border-line whitespace-nowrap ${col.widthClass} ${
                       col.align === 'right' ? 'text-right' : 'text-left'
                     }`}
                   >
@@ -155,7 +161,7 @@ export default function CuratedStockTable({
                       <button
                         type="button"
                         onClick={() => handleSort(col)}
-                        className={`inline-flex items-center gap-1.5 min-h-[38px] px-3 py-2 text-[11px] font-semibold uppercase tracking-wider hover:text-ink transition-colors cursor-pointer ${
+                        className={`inline-flex items-center gap-1 min-h-[38px] px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider hover:text-ink transition-colors cursor-pointer ${
                           col.align === 'right' ? 'justify-end' : 'justify-start'
                         } ${isSorted ? 'text-brand' : 'text-ink-muted'}`}
                       >
@@ -163,7 +169,7 @@ export default function CuratedStockTable({
                         <SortIcon />
                       </button>
                       {col.tooltip && (
-                        <span className="pr-2 -ml-1.5">
+                        <span className="pr-1.5 -ml-1">
                           <InfoTooltip term={col.tooltip} />
                         </span>
                       )}
@@ -174,7 +180,7 @@ export default function CuratedStockTable({
 
               <th
                 scope="col"
-                className="px-3 py-2.5 text-right border-b border-line whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-ink-muted"
+                className="w-[8%] px-2.5 py-2.5 text-right border-b border-line whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-ink-muted"
               >
                 Report
               </th>
@@ -201,10 +207,10 @@ export default function CuratedStockTable({
                   }}
                   className="hover:bg-subtle/60 transition-colors cursor-pointer group align-top"
                 >
-                  {/* 1. Sticky Row Header: Ticker, Name, Stage, Overview */}
+                  {/* 1. Company, Stage & Concise Overview */}
                   <th
                     scope="row"
-                    className="px-3.5 py-3.5 border-b border-line min-w-[270px] max-w-[330px]"
+                    className="px-3 py-3 border-b border-line"
                   >
                     <div className="space-y-1.5">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -234,7 +240,7 @@ export default function CuratedStockTable({
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span
                           title={company.stage_rationale}
-                          className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
+                          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${
                             isEstablished
                               ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
                               : 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/25'
@@ -249,7 +255,7 @@ export default function CuratedStockTable({
                         </span>
 
                         {showBucketTag && company.bucket_name && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-subtle text-ink-muted border border-line truncate max-w-[180px]">
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-subtle text-ink-muted border border-line truncate max-w-[160px]">
                             {company.bucket_name}
                           </span>
                         )}
@@ -260,13 +266,13 @@ export default function CuratedStockTable({
                             title="Full 4-M equity research report already cached for instant loading"
                           >
                             <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
-                            <span>Instant report</span>
+                            <span>Cached</span>
                           </span>
                         )}
                       </div>
 
                       {/* Concise Company Overview */}
-                      <p className="text-xs text-ink-secondary leading-relaxed">
+                      <p className="text-xs text-ink-secondary leading-snug">
                         {company.overview}
                       </p>
 
@@ -279,8 +285,8 @@ export default function CuratedStockTable({
                     </div>
                   </th>
 
-                  {/* 2. Big 4 Numbers & Multi-Year Trends */}
-                  <td className="px-3 py-3.5 border-b border-line">
+                  {/* 2. Big 4 TTM/MRQ Numbers, Delta Change & Multi-Year Trends */}
+                  <td className="px-2.5 py-3 border-b border-line">
                     <CuratedBig4Cell
                       big4={company.big4}
                       currency={currency}
@@ -288,103 +294,115 @@ export default function CuratedStockTable({
                     />
                   </td>
 
-                  {/* 3. ROIC */}
-                  <td className="px-3 py-3.5 border-b border-line text-right whitespace-nowrap">
-                    <div className="flex flex-col items-end">
-                      <span
-                        className={`font-mono font-bold text-sm num ${getReturnColorClass(
-                          company.roic_pct
-                        )}`}
-                      >
-                        {formatMetricPercent(company.roic_pct, 1)}
-                      </span>
-                      {company.roic_5y_avg_pct !== null &&
-                        company.roic_5y_avg_pct !== undefined && (
-                          <span className="text-[11px] font-mono text-ink-muted num mt-0.5">
-                            5Y: {formatMetricPercent(company.roic_5y_avg_pct, 1)}
-                          </span>
-                        )}
-                    </div>
-                  </td>
-
-                  {/* 4. ROE */}
-                  <td className="px-3 py-3.5 border-b border-line text-right whitespace-nowrap">
-                    <div className="flex flex-col items-end">
-                      <span
-                        className={`font-mono font-bold text-sm num ${getReturnColorClass(
-                          company.roe_pct
-                        )}`}
-                      >
-                        {formatMetricPercent(company.roe_pct, 1)}
-                      </span>
-                      {company.roe_5y_avg_pct !== null &&
-                        company.roe_5y_avg_pct !== undefined && (
-                          <span className="text-[11px] font-mono text-ink-muted num mt-0.5">
-                            5Y: {formatMetricPercent(company.roe_5y_avg_pct, 1)}
-                          </span>
-                        )}
-                    </div>
-                  </td>
-
-                  {/* 5. Net Income Margin */}
-                  <td className="px-3 py-3.5 border-b border-line text-right whitespace-nowrap">
-                    <span
-                      className={`font-mono font-bold text-sm num ${getMarginColorClass(
-                        company.net_income_margin_pct
-                      )}`}
-                    >
-                      {formatMetricPercent(company.net_income_margin_pct, 1)}
-                    </span>
-                  </td>
-
-                  {/* 6. FCF Margin */}
-                  <td className="px-3 py-3.5 border-b border-line text-right whitespace-nowrap">
-                    <span
-                      className={`font-mono font-bold text-sm num ${getMarginColorClass(
-                        company.fcf_margin_pct
-                      )}`}
-                    >
-                      {formatMetricPercent(company.fcf_margin_pct, 1)}
-                    </span>
-                  </td>
-
-                  {/* 7. Total Debt */}
-                  <td className="px-3 py-3.5 border-b border-line text-right whitespace-nowrap">
-                    <div className="flex flex-col items-end">
-                      <span className="font-mono font-semibold text-sm text-ink num">
-                        {formatSignedCurrency(company.total_debt, currency)}
-                      </span>
-                      {hasDebt && hasCash && company.total_debt > company.cash_and_equivalents && (
-                        <span className="text-[10px] font-mono text-ink-muted num mt-0.5">
-                          Net {formatSignedCurrency(company.total_debt - company.cash_and_equivalents, currency)}
+                  {/* 3. ROIC & ROE Paired Cell */}
+                  <td className="px-2.5 py-3 border-b border-line text-right whitespace-nowrap">
+                    <div className="space-y-2">
+                      <div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted block">
+                          ROIC
                         </span>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* 8. Cash & Equivalents */}
-                  <td className="px-3 py-3.5 border-b border-line text-right whitespace-nowrap">
-                    <div className="flex flex-col items-end">
-                      <span className="font-mono font-semibold text-sm text-ink num">
-                        {formatSignedCurrency(company.cash_and_equivalents, currency)}
-                      </span>
-                      {isNetCash && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 mt-0.5">
-                          Net Cash
+                        <span
+                          className={`font-mono font-bold text-xs sm:text-sm num ${getReturnColorClass(
+                            company.roic_pct
+                          )}`}
+                        >
+                          {formatMetricPercent(company.roic_pct, 1)}
                         </span>
-                      )}
+                        {company.roic_5y_avg_pct !== null &&
+                          company.roic_5y_avg_pct !== undefined && (
+                            <span className="block text-[10px] font-mono text-ink-muted num">
+                              5Y {formatMetricPercent(company.roic_5y_avg_pct, 1)}
+                            </span>
+                          )}
+                      </div>
+
+                      <div className="pt-1.5 border-t border-line/60">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted block">
+                          ROE
+                        </span>
+                        <span
+                          className={`font-mono font-bold text-xs sm:text-sm num ${getReturnColorClass(
+                            company.roe_pct
+                          )}`}
+                        >
+                          {formatMetricPercent(company.roe_pct, 1)}
+                        </span>
+                      </div>
                     </div>
                   </td>
 
-                  {/* 9. Open Full Report Action */}
+                  {/* 4. Net Income Margin & FCF Margin Paired Cell */}
+                  <td className="px-2.5 py-3 border-b border-line text-right whitespace-nowrap">
+                    <div className="space-y-2">
+                      <div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted block">
+                          NI Mgn
+                        </span>
+                        <span
+                          className={`font-mono font-bold text-xs sm:text-sm num ${getMarginColorClass(
+                            company.net_income_margin_pct
+                          )}`}
+                        >
+                          {formatMetricPercent(company.net_income_margin_pct, 1)}
+                        </span>
+                      </div>
+
+                      <div className="pt-1.5 border-t border-line/60">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted block">
+                          FCF Mgn
+                        </span>
+                        <span
+                          className={`font-mono font-bold text-xs sm:text-sm num ${getMarginColorClass(
+                            company.fcf_margin_pct
+                          )}`}
+                        >
+                          {formatMetricPercent(company.fcf_margin_pct, 1)}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* 5. Total Debt & Cash Equivalents Paired Cell */}
+                  <td className="px-2.5 py-3 border-b border-line text-right whitespace-nowrap">
+                    <div className="space-y-2">
+                      <div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted block">
+                          Debt
+                        </span>
+                        <span className="font-mono font-semibold text-xs sm:text-sm text-ink num">
+                          {formatSignedCurrency(company.total_debt, currency)}
+                        </span>
+                      </div>
+
+                      <div className="pt-1.5 border-t border-line/60">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted block">
+                          Cash
+                        </span>
+                        <span className="font-mono font-semibold text-xs sm:text-sm text-ink num">
+                          {formatSignedCurrency(company.cash_and_equivalents, currency)}
+                        </span>
+                        {isNetCash ? (
+                          <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 mt-0.5">
+                            Net Cash
+                          </span>
+                        ) : hasDebt && hasCash && company.total_debt > company.cash_and_equivalents ? (
+                          <span className="block text-[9px] font-mono text-ink-muted num mt-0.5">
+                            Net {formatSignedCurrency(company.total_debt - company.cash_and_equivalents, currency)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* 6. Open Full Report Action (Always Visible Inside Table) */}
                   <td
-                    className="px-3 py-3.5 border-b border-line text-right whitespace-nowrap"
+                    className="px-2.5 py-3 border-b border-line text-right whitespace-nowrap align-middle"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Link
                       to={reportUrl}
                       aria-label={`Open full research report for ${company.ticker}`}
-                      className="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg text-xs font-semibold bg-brand-soft hover:bg-brand text-brand hover:text-white border border-brand/20 transition-colors"
+                      className="inline-flex items-center justify-center gap-0.5 min-h-[32px] px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-soft hover:bg-brand text-brand hover:text-white border border-brand/20 transition-colors"
                     >
                       <span>Report</span>
                       <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
