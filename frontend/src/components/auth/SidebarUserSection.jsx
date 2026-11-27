@@ -196,7 +196,7 @@ export default function SidebarUserSection({ collapsed = false, onAction }) {
         </div>
 
         <p className="mt-3 text-[11px] text-ink-muted bg-subtle/70 border border-line rounded-lg px-2.5 py-2 leading-relaxed">
-          Signed in and ready for upcoming personalized StockClue features.
+          Signed in — your Favorites watchlist and Margin of Safety buy prices sync to your account.
         </p>
 
         <div className="mt-3 pt-2.5 border-t border-line">

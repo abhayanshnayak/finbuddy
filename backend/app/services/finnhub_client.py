@@ -39,7 +39,10 @@ class FinnhubClient:
         return res.json()
 
     def get_quote(self, symbol: str) -> Dict[str, Any]:
-        res = requests.get(f"{self.base_url}/quote?symbol={symbol}&token={self.api_key}")
+        res = requests.get(
+            f"{self.base_url}/quote?symbol={symbol}&token={self.api_key}",
+            timeout=10,
+        )
         res.raise_for_status()
         return res.json()
 

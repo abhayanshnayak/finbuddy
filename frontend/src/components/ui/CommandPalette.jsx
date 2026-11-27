@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Home,
+  Star,
   LineChart,
   Filter,
   Layers,
@@ -103,6 +104,14 @@ function CommandPaletteDialog({ onClose, theme, toggleTheme }) {
         action: () => navigate('/'),
       },
       {
+        id: 'nav-favorites',
+        group: 'Navigation',
+        title: 'Favorites Watchlist',
+        subtitle: 'Track starred stocks, Margin of Safety prices & live deltas',
+        icon: Star,
+        action: () => navigate('/favorites'),
+      },
+      {
         id: 'nav-ticker',
         group: 'Navigation',
         title: 'Single Ticker Analysis',
@@ -155,7 +164,7 @@ function CommandPaletteDialog({ onClose, theme, toggleTheme }) {
             id: 'act-signin',
             group: 'Account',
             title: 'Sign in with Google or Facebook',
-            subtitle: 'Optional sign-in for upcoming personalized features',
+            subtitle: 'Sign in to save Favorites and track Margin of Safety prices',
             icon: LogIn,
             action: () => openSignInModal(),
           },

@@ -174,3 +174,100 @@ class DBService:
         except Exception as e:
             print(f"Firestore get user profile failed for {uid}: {e}")
         return {}
+
+    def list_user_favorites(self, uid: str) -> list:
+        if not self.db or not uid:
+            return []
+        try:
+            favorites = []
+            docs = (
+                self.db.collection("users")
+                .document(uid)
+                .collection("favorites")
+                .stream()
+            )
+            for doc in docs:
+                data = doc.to_dict() or {}
+                data["ticker"] = (data.get("ticker") or doc.id).upper()
+                favorites.append(data)
+            favorites.sort(key=lambda item: item.get("added_at") or "", reverse=True)
+            return favorites
+        except Exception as e:
+            print(f"Firestore list favorites failed for {uid}: {e}")
+            raise RuntimeError(f"Failed to load favorites: {e}") from e
+
+    def get_user_favorite(self, uid: str, ticker: str) -> dict:
+        if not self.db or not uid or not ticker:
+            return {}
+        try:
+            doc = (
+                self.db.collection("users")
+                .document(uid)
+                .collection("favorites")
+                .document(ticker.upper())
+                .get()
+            )
+            if doc.exists:
+                data = doc.to_dict() or {}
+                data["ticker"] = (data.get("ticker") or doc.id).upper()
+                return data
+        except Exception as e:
+            print(f"Firestore get favorite failed for {uid}/{ticker}: {e}")
+        return {}
+
+    def upsert_user_favorite(self, uid: str, ticker: str, data: dict) -> dict:
+        if not self.db:
+            raise RuntimeError("Database is unavailable.")
+        if not uid or not ticker:
+            raise ValueError("User ID and ticker are required.")
+
+        norm_ticker = ticker.upper()
+        now_iso = datetime.now(pytz.utc).isoformat()
+        fav_ref = (
+            self.db.collection("users")
+            .document(uid)
+            .collection("favorites")
+            .document(norm_ticker)
+        )
+        existing_doc = fav_ref.get()
+        existing = existing_doc.to_dict() if existing_doc.exists else {}
+
+        record = {
+            "ticker": norm_ticker,
+            "name": data.get("name") or existing.get("name") or norm_ticker,
+            "industry": data.get("industry") if data.get("industry") is not None else existing.get("industry", ""),
+            "margin_of_safety_price": (
+                data["margin_of_safety_price"]
+                if "margin_of_safety_price" in data
+                else existing.get("margin_of_safety_price")
+            ),
+            "model_mos_price": (
+                data["model_mos_price"]
+                if "model_mos_price" in data
+                else existing.get("model_mos_price")
+            ),
+            "last_known_price": (
+                data["last_known_price"]
+                if "last_known_price" in data and data["last_known_price"] is not None
+                else existing.get("last_known_price")
+            ),
+            "added_at": existing.get("added_at") or now_iso,
+            "updated_at": now_iso,
+        }
+        fav_ref.set(record)
+        return record
+
+    def delete_user_favorite(self, uid: str, ticker: str) -> bool:
+        if not self.db:
+            raise RuntimeError("Database is unavailable.")
+        if not uid or not ticker:
+            return False
+        norm_ticker = ticker.upper()
+        (
+            self.db.collection("users")
+            .document(uid)
+            .collection("favorites")
+            .document(norm_ticker)
+            .delete()
+        )
+        return True

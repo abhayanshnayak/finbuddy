@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   RefreshCw,
   Printer,
@@ -9,12 +10,17 @@ import {
   CheckCircle2,
   Sparkles,
   ChevronRight,
+  Star,
+  Loader2,
+  LogIn,
 } from 'lucide-react';
 import {
   formatLargeNumber,
   formatPrice,
   generateReportMarkdown,
 } from '../../utils/formatters';
+import { useAuth } from '../../context/authStore';
+import { useFavorites } from '../../context/favoritesStore';
 
 export default function CompanyHeader({
   report,
@@ -26,6 +32,15 @@ export default function CompanyHeader({
   onOpenAudit,
 }) {
   const [copied, setCopied] = useState(false);
+  const [starAnnouncement, setStarAnnouncement] = useState('');
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { getFavorite, toggleFavorite, pendingTickers, error: favoritesError, clearError } =
+    useFavorites();
+
+  const normalizedTicker = (report.ticker || '').toUpperCase();
+  const favoriteEntry = getFavorite(normalizedTicker);
+  const favorited = Boolean(favoriteEntry);
+  const starBusy = pendingTickers.has(normalizedTicker);
 
   const taxonomy = [
     report.sector,
@@ -34,6 +49,22 @@ export default function CompanyHeader({
   ].filter((item) => item && item !== 'Unknown');
 
   const marketCap = report.financials?.valuations?.market_cap;
+  const modelMosPrice = Number(report.financials?.valuations?.margin_of_safety_price) || null;
+
+  const handleToggleFavorite = async () => {
+    const result = await toggleFavorite({
+      ticker: normalizedTicker,
+      name: report.name || normalizedTicker,
+      industry: report.industry && report.industry !== 'Unknown' ? report.industry : '',
+      last_known_price: Number(report.price_at_storage) || null,
+      model_mos_price: modelMosPrice && modelMosPrice > 0 ? modelMosPrice : null,
+    });
+    if (result?.status === 'added') {
+      setStarAnnouncement(`${normalizedTicker} added to Favorites.`);
+    } else if (result?.status === 'removed') {
+      setStarAnnouncement(`${normalizedTicker} removed from Favorites.`);
+    }
+  };
 
   const handleCopyMarkdown = async () => {
     try {
@@ -58,7 +89,98 @@ export default function CompanyHeader({
             <h1 className="text-2xl sm:text-3xl font-bold text-ink tracking-tight">
               {report.name}
             </h1>
+
+            {/* Favorite Star Control */}
+            <div className="inline-flex flex-wrap items-center gap-2 no-print">
+              <button
+                type="button"
+                onClick={handleToggleFavorite}
+                disabled={starBusy}
+                aria-pressed={isAuthenticated ? favorited : undefined}
+                aria-label={
+                  isAuthenticated
+                    ? `Favorite ${normalizedTicker}`
+                    : `Favorite ${normalizedTicker} — sign in required`
+                }
+                title={
+                  isAuthenticated
+                    ? favorited
+                      ? `Remove ${normalizedTicker} from Favorites`
+                      : `Add ${normalizedTicker} to Favorites`
+                    : 'Favorites are for signed-in users — click to sign in'
+                }
+                className={`inline-flex items-center gap-1.5 min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer disabled:opacity-60 ${
+                  favorited
+                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/35 hover:bg-amber-500/20'
+                    : 'bg-surface hover:bg-subtle text-ink-secondary hover:text-ink border-line-strong'
+                }`}
+              >
+                {starBusy ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-500" aria-hidden="true" />
+                ) : (
+                  <Star
+                    className={`w-4 h-4 transition-colors ${
+                      favorited
+                        ? 'fill-amber-400 text-amber-500'
+                        : 'text-ink-muted'
+                    }`}
+                    aria-hidden="true"
+                  />
+                )}
+                <span>Favorite</span>
+              </button>
+
+              {isAuthenticated && favorited && (
+                <Link
+                  to="/favorites"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-subtle hover:bg-brand-soft text-ink-secondary hover:text-brand border border-line transition-colors"
+                >
+                  {favoriteEntry?.margin_of_safety_price > 0 ? (
+                    <span>
+                      My MOS:{' '}
+                      <strong className="font-mono num text-ink">
+                        {formatPrice(favoriteEntry.margin_of_safety_price)}
+                      </strong>
+                    </span>
+                  ) : (
+                    <span>Set MOS in Favorites</span>
+                  )}
+                  <ChevronRight className="w-3 h-3" aria-hidden="true" />
+                </Link>
+              )}
+
+              {!authLoading && !isAuthenticated && (
+                <button
+                  type="button"
+                  onClick={handleToggleFavorite}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-brand transition-colors cursor-pointer"
+                >
+                  <LogIn className="w-3 h-3" aria-hidden="true" />
+                  <span>Sign in to save favorites</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          <div role="status" aria-live="polite" className="visually-hidden">
+            {starAnnouncement}
+          </div>
+
+          {favoritesError && (
+            <div
+              role="alert"
+              className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-700 dark:text-rose-300 no-print"
+            >
+              <span>{favoritesError}</span>
+              <button
+                type="button"
+                onClick={clearError}
+                className="font-semibold underline hover:no-underline cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* NAICS Taxonomy Breadcrumb */}
           <div className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">

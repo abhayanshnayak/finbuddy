@@ -2,10 +2,12 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AuthProvider from './context/AuthProvider';
 import CompaniesProvider from './context/CompaniesProvider';
+import FavoritesProvider from './context/FavoritesProvider';
 import AppShell from './components/AppShell';
 import WorkspaceHome from './components/WorkspaceHome';
 
 const SingleTickerTab = lazy(() => import('./components/SingleTickerTab'));
+const FavoritesTab = lazy(() => import('./components/FavoritesTab'));
 const BulkIngestionTab = lazy(() => import('./components/BulkIngestionTab'));
 const TagSearchTab = lazy(() => import('./components/TagSearchTab'));
 const TermsOfService = lazy(() => import('./components/TermsOfService'));
@@ -57,19 +59,22 @@ function App() {
     <HashRouter>
       <AuthProvider>
         <CompaniesProvider>
-          <AppShell theme={theme} toggleTheme={toggleTheme}>
-            <Suspense fallback={<RouteFallback />}>
-              <Routes>
-                <Route path="/" element={<WorkspaceHome />} />
-                <Route path="/ticker" element={<SingleTickerTab />} />
-                <Route path="/ticker/:symbol" element={<SingleTickerTab />} />
-                <Route path="/screener" element={<TagSearchTab />} />
-                <Route path="/ingest" element={<BulkIngestionTab />} />
-                <Route path="/terms" element={<TermsOfService />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
-          </AppShell>
+          <FavoritesProvider>
+            <AppShell theme={theme} toggleTheme={toggleTheme}>
+              <Suspense fallback={<RouteFallback />}>
+                <Routes>
+                  <Route path="/" element={<WorkspaceHome />} />
+                  <Route path="/favorites" element={<FavoritesTab />} />
+                  <Route path="/ticker" element={<SingleTickerTab />} />
+                  <Route path="/ticker/:symbol" element={<SingleTickerTab />} />
+                  <Route path="/screener" element={<TagSearchTab />} />
+                  <Route path="/ingest" element={<BulkIngestionTab />} />
+                  <Route path="/terms" element={<TermsOfService />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
+            </AppShell>
+          </FavoritesProvider>
         </CompaniesProvider>
       </AuthProvider>
     </HashRouter>

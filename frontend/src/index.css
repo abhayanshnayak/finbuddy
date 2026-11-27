@@ -85,6 +85,166 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+/* Visually hidden utility (keeps content in accessibility tree) */
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+/* Responsive & sortable Favorites table (container-query stacked cards on narrow containers) */
+.sc-favorites-table-wrapper {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  container-type: inline-size;
+}
+
+.sc-favorites-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  --label-2: "Current Price";
+  --label-3: "Your MOS Buy Price";
+  --label-4: "Delta vs. MOS";
+  --label-5: "Actions";
+}
+
+.sc-favorites-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+}
+
+.sc-favorites-table thead th:has(> button) {
+  padding: 0;
+}
+
+.sc-favorites-table thead th .sc-sort-indicator-asc,
+.sc-favorites-table thead th .sc-sort-indicator-desc {
+  display: none;
+}
+
+.sc-favorites-table thead th[aria-sort="ascending"] .sc-sort-indicator-neutral,
+.sc-favorites-table thead th[aria-sort="descending"] .sc-sort-indicator-neutral {
+  display: none;
+}
+
+.sc-favorites-table thead th[aria-sort="ascending"] .sc-sort-indicator-asc {
+  display: inline-flex;
+}
+
+.sc-favorites-table thead th[aria-sort="descending"] .sc-sort-indicator-desc {
+  display: inline-flex;
+}
+
+.sc-favorites-table tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  background-color: var(--bg-surface);
+  font-weight: inherit;
+  text-align: left;
+}
+
+.sc-favorites-table tbody tr:hover th {
+  background-color: rgb(var(--bg-subtle-rgb) / 0.6);
+}
+
+/* Post-interaction validation highlight for inline MOS input */
+.sc-mos-input:is(:user-invalid, [aria-invalid="true"]) {
+  border-color: rgb(225 29 72);
+  background-color: rgb(244 63 94 / 0.08);
+}
+
+@container (width < 680px) {
+  .sc-favorites-table,
+  .sc-favorites-table thead,
+  .sc-favorites-table tbody,
+  .sc-favorites-table tr,
+  .sc-favorites-table th,
+  .sc-favorites-table td {
+    display: block;
+  }
+
+  .sc-favorites-table thead {
+    display: none;
+  }
+
+  .sc-favorites-table tbody {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .sc-favorites-table tbody tr {
+    border: 1px solid var(--border-subtle);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background-color: var(--bg-surface);
+  }
+
+  .sc-favorites-table tbody th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    background-color: rgb(var(--bg-subtle-rgb) / 0.85);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0.75rem 1rem;
+  }
+
+  .sc-favorites-table tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    text-align: right;
+    border-bottom: 1px solid rgb(var(--border-subtle-rgb) / 0.6);
+  }
+
+  .sc-favorites-table tbody td .sc-fav-cell-stack {
+    align-items: flex-end;
+    text-align: right;
+  }
+
+  .sc-favorites-table tbody td:last-child {
+    border-bottom: none;
+  }
+
+  .sc-favorites-table tbody td::before {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    text-align: left;
+    flex-shrink: 0;
+    padding-top: 0.15rem;
+  }
+
+  .sc-favorites-table tbody td:nth-child(2)::before {
+    content: var(--label-2) ": ";
+  }
+
+  .sc-favorites-table tbody td:nth-child(3)::before {
+    content: var(--label-3) ": ";
+  }
+
+  .sc-favorites-table tbody td:nth-child(4)::before {
+    content: var(--label-4) ": ";
+  }
+
+  .sc-favorites-table tbody td:nth-child(5)::before {
+    content: var(--label-5) ": ";
+  }
+}
+
 /* Subtle enterprise scrollbars */
 .custom-scrollbar {
   scrollbar-width: thin;

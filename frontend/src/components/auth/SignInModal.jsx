@@ -193,7 +193,7 @@ export default function SignInModal() {
             </h1>
             <p id={descId} className="mt-1 text-xs text-ink-muted leading-relaxed">
               {signInPromptReason ||
-                'Sign-in is optional — all research reports remain open. Sign in with Google or Facebook to enable upcoming personalized features.'}
+                'Sign-in is optional — all research reports remain open. Sign in with Google or Facebook to save favorite stocks and track your Margin of Safety buy prices.'}
             </p>
           </div>
           <button

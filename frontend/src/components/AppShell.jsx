@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import {
   Home,
+  Star,
   LineChart,
   Filter,
   Layers,
@@ -17,9 +18,12 @@ import ThemeToggle from './ui/ThemeToggle';
 import CommandPalette from './ui/CommandPalette';
 import SidebarUserSection from './auth/SidebarUserSection';
 import { useCompanies } from '../context/companiesStore';
+import { useAuth } from '../context/authStore';
+import { useFavorites } from '../context/favoritesStore';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Workspace Home', icon: Home, end: true },
+  { to: '/favorites', label: 'Favorites', icon: Star, end: false },
   { to: '/ticker', label: 'Ticker Research', icon: LineChart, end: false },
   { to: '/screener', label: 'Tag Screener', icon: Filter, end: false },
   { to: '/ingest', label: 'Bulk Pipeline', icon: Layers, end: false },
@@ -28,6 +32,8 @@ const NAV_ITEMS = [
 export default function AppShell({ theme, toggleTheme, children }) {
   const location = useLocation();
   const { companies } = useCompanies();
+  const { isAuthenticated } = useAuth();
+  const { favorites } = useFavorites();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem('stockclue_sidebar_collapsed') === 'true';
@@ -65,7 +71,8 @@ export default function AppShell({ theme, toggleTheme, children }) {
   const activeSymbol = tickerMatch ? decodeURIComponent(tickerMatch[1]).toUpperCase() : null;
 
   let sectionTitle = 'Workspace Home';
-  if (path.startsWith('/ticker')) sectionTitle = 'Ticker Research';
+  if (path.startsWith('/favorites')) sectionTitle = 'Favorites';
+  else if (path.startsWith('/ticker')) sectionTitle = 'Ticker Research';
   else if (path.startsWith('/screener')) sectionTitle = 'Tag Screener';
   else if (path.startsWith('/ingest')) sectionTitle = 'Bulk Pipeline';
   else if (path.startsWith('/terms')) sectionTitle = 'Terms & Disclaimer';
@@ -150,6 +157,11 @@ export default function AppShell({ theme, toggleTheme, children }) {
                 {!sidebarCollapsed && (
                   <span className="truncate flex-1">{item.label}</span>
                 )}
+                {!sidebarCollapsed && item.to === '/favorites' && isAuthenticated && favorites.length > 0 && (
+                  <span className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 num">
+                    {favorites.length}
+                  </span>
+                )}
                 {!sidebarCollapsed && item.to === '/screener' && companies.length > 0 && (
                   <span className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded bg-subtle text-ink-muted border border-line num">
                     {companies.length}
@@ -228,6 +240,11 @@ export default function AppShell({ theme, toggleTheme, children }) {
                   >
                     <Icon className="w-4 h-4 flex-shrink-0" />
                     <span className="flex-1">{item.label}</span>
+                    {item.to === '/favorites' && isAuthenticated && favorites.length > 0 && (
+                      <span className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 num">
+                        {favorites.length}
+                      </span>
+                    )}
                     {item.to === '/screener' && companies.length > 0 && (
                       <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-subtle text-ink-muted border border-line num">
                         {companies.length}
